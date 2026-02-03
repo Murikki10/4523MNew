@@ -1,0 +1,50 @@
+<html>
+
+<head>
+    <title>Lab03 Task 2</title>
+    <style>
+        body {
+            font-family: serif;
+            padding: 24px;
+            max-width: 720px;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0;
+            font-size: 18px;
+        }
+
+        input[type="number"] {
+            padding: 6px;
+            width: 200px;
+            font-size: 16px;
+        }
+
+        .btn {
+            margin-top: 12px;
+            padding: 6px 10px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Calculate Two Numbers Function</h1>
+
+    <form action="Lab03_Task2.php" method="post">
+        <label>
+            Enter first number:
+            <input type="number" name="num1" step="any" required />
+        </label>
+
+        <label>
+            Enter second number:
+            <input type="number" name="num2" step="any" required />
+        </label>
+
+        <button type="submit" class="btn">Calculate</button>
+    </form>
+</body>
+
+</html>

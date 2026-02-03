@@ -1,0 +1,62 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>Lab03 Task 3</title>
+    <style>
+        body {
+            font-family: serif;
+            padding: 24px;
+            max-width: 720px;
+        }
+
+        h1 {
+            font-size: 32px;
+        }
+
+        label {
+            display: block;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        input[type="text"],
+        input[type="number"] {
+            padding: 6px;
+            width: 260px;
+            font-size: 16px;
+        }
+
+        .buttons {
+            margin-top: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>User Name and Year of Birth</h1>
+
+    <form action="Lab03_Task3.php" method="post">
+        <label>
+            First Name:
+            <input type="text" name="firstname" required />
+        </label>
+
+        <label>
+            Last Name:
+            <input type="text" name="lastname" required />
+        </label>
+
+        <label>
+            Year of Birth:
+            <input type="number" name="yob" min="1900" max="2100" required />
+        </label>
+
+        <div class="buttons">
+            <button type="submit">Send</button>
+            <button type="reset">Cancel</button>
+        </div>
+    </form>
+</body>
+
+</html>

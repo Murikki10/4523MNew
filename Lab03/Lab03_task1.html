@@ -1,0 +1,75 @@
+<html>
+
+<head>
+    <title>Lab03 Task 1</title>
+    <style>
+        body {
+            font-family: serif;
+            padding: 24px;
+            max-width: 720px;
+        }
+
+        label {
+            display: inline-block;
+            margin: 8px 0;
+            font-size: 18px;
+        }
+
+        input[type="text"],
+        textarea {
+            display: block;
+            margin-top: 6px;
+            padding: 6px;
+            font-size: 16px;
+            width: 320px;
+            box-sizing: border-box;
+        }
+
+        textarea {
+            width: 420px;
+            height: 90px;
+            resize: vertical;
+        }
+
+        .radio-group {
+            margin: 8px 0 16px 0;
+        }
+
+        .submit-btn {
+            margin-top: 12px;
+            padding: 6px 12px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+
+<body>
+    <form action="Lab03_Task1.php" method="post">
+        <label for="name">Name:
+            <input type="text" id="name" name="name" />
+        </label> <br />
+
+        <label for="gradyear">Graduate Year:
+            <input type="text" id="gradyear" name="gradyear" />
+        </label>
+
+        <div class="radio-group" role="radiogroup" aria-labelledby="alumni-label">
+            <span id="alumni-label" style="display:block; margin-bottom:6px; font-size:18px;">Alumni</span>
+            <label>
+                <input type="radio" name="alumni" value="yes" checked /> Yes
+            </label>
+            <br />
+            <label>
+                <input type="radio" name="alumni" value="no" /> No
+            </label>
+        </div>
+
+        <label for="comments">Comments
+            <textarea id="comments" name="comments" placeholder="Enter your comments here..."></textarea>
+        </label>
+
+        <button type="submit" class="submit-btn">Submit</button>
+    </form>
+</body>
+
+</html>
