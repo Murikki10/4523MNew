@@ -4,6 +4,32 @@
 <head>
     <meta charset="utf-8" />
     <title>Lab05 Task 3</title>
+    <script>
+    function clearForm() {
+        var f = document.getElementById('addForm');
+        if (!f) return;
+        var inputs = f.querySelectorAll('input');
+        for (var i = 0; i < inputs.length; i++) {
+            var el = inputs[i];
+            var t = el.type.toLowerCase();
+            if (t === 'text' || t === 'password' || t === 'email' || t === 'number' || t === 'tel' || t === 'hidden') {
+                el.value = '';
+            } else if (t === 'radio' || t === 'checkbox') {
+                el.checked = false;
+            }
+        }
+        var selects = f.querySelectorAll('select');
+        for (var j = 0; j < selects.length; j++) {
+            selects[j].selectedIndex = -1;
+        }
+        var areas = f.querySelectorAll('textarea');
+        for (var k = 0; k < areas.length; k++) {
+            areas[k].value = '';
+        }
+        var msg = document.getElementById('msg');
+        if (msg) msg.innerHTML = '';
+    }
+    </script>
 </head>
 
 <body>
@@ -55,7 +81,9 @@
     }
 
     if ($message !== '') {
-        echo '<p><strong>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</strong></p>';
+        echo '<p id="msg"><strong>' . htmlspecialchars($message, ENT_QUOTES, 'UTF-8') . '</strong></p>';
+    } else {
+        echo '<p id="msg"></p>';
     }
 
     $valID = isset($custID) ? htmlspecialchars($custID, ENT_QUOTES, 'UTF-8') : '';
@@ -64,7 +92,7 @@
     $valGender = isset($custGender) ? htmlspecialchars($custGender, ENT_QUOTES, 'UTF-8') : '';
     ?>
 
-    <form method="post" action="">
+    <form id="addForm" method="post" action="">
         <table>
             <tr>
                 <td>Customer ID</td>
@@ -89,7 +117,7 @@
                 <td></td>
                 <td>
                     <input type="submit" value="Submit" />
-                    <input type="reset" value="Reset" />
+                    <input type="button" value="Reset" onclick="clearForm()" />
                 </td>
             </tr>
         </table>
