@@ -20,22 +20,87 @@
   body { font-family: 'Inter', sans-serif; margin: 0; background-color: #fff; color: #333; line-height: 1.6; }
 
   /* --- Navigation --- */
-  nav { 
-    background: rgba(255, 255, 255, 0.95); 
-    padding: 15px 8%; 
+  /* --- 全局變量定義 (確保顏色一致) --- */
+:root {
+    --primary: #2c3e50;    /* 深藍色 */
+    --accent: #3498db;     /* 天藍色 */
+    --danger: #e74c3c;     /* 紅色 (用於 Logout) */
+    --border: #ececec;     /* 邊框顏色 */
+    --text-main: #333;
+    --text-muted: #666;
+}
+
+/* --- Navbar 主體 --- */
+nav { 
+    padding: 20px 8%; 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
-    border-bottom: 1px solid #eee; 
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.9); /* 半透明效果 */
+    backdrop-filter: blur(10px);          /* 毛玻璃效果 */
     position: sticky; 
     top: 0; 
     z-index: 1000;
-    backdrop-filter: blur(10px);
-  }
-  .logo { font-family: 'Playfair Display', serif; font-size: 26px; font-weight: bold; color: var(--primary-color); letter-spacing: -1px; }
-  .logo span { color: var(--accent-color); }
-  .nav-links a { text-decoration: none; color: #555; margin-left: 30px; font-size: 14px; font-weight: 500; }
-  .nav-links a:hover { color: var(--accent-color); }
+}
+
+/* --- Logo 樣式 --- */
+.logo { 
+    font-family: 'Playfair Display', serif; 
+    font-size: 24px; 
+    font-weight: bold; 
+    color: var(--primary); 
+    text-decoration: none; 
+    letter-spacing: -0.5px;
+}
+
+.logo span { 
+    color: var(--accent); 
+}
+
+/* --- 導航連結 --- */
+.nav-links { 
+    display: flex; 
+    align-items: center; 
+}
+
+.nav-links a { 
+    text-decoration: none; 
+    color: var(--text-muted); 
+    margin-left: 25px; 
+    font-size: 14px; 
+    font-weight: 500; 
+    transition: all 0.3s ease;
+}
+
+.nav-links a:hover { 
+    color: var(--accent); 
+}
+
+/* --- 購物車數量標籤 --- */
+.cart-count { 
+    background: var(--accent); 
+    color: white; 
+    padding: 2px 8px; 
+    border-radius: 10px; 
+    font-size: 11px; 
+    margin-left: 5px; 
+    vertical-align: middle;
+    font-weight: 600;
+}
+
+/* --- 特別處理 Logout 按鈕 --- */
+.nav-links a.logout-btn {
+    color: var(--danger);
+    padding: 8px 15px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+}
+
+.nav-links a.logout-btn:hover {
+    background: rgba(231, 76, 60, 0.1); /* 淺紅色背景回饋 */
+    border-color: var(--danger);
+}
 
   /* --- Hero Section --- */
   .hero { 
@@ -112,13 +177,13 @@
 <body>
 
 <nav>
-  <div class="logo">Premium<span>Living</span></div>
-  <div class="nav-links">
-    <a href="index.html">Collection</a>
-    <a href="order_history.html">Order History</a>
-    <a href="profile.html">My Account</a>
-    <a href="login.html">Logout</a>
-  </div>
+    <a href="index.php" class="logo">Premium<span>Living</span></a>
+    <div class="nav-links">
+        <a href="index.php">Collection</a>
+        <a href="cart.php">Cart <span class="cart-count" id="cartCount">0</span></a>
+        <a href="dashboard.php">Account</a>
+        <a href="login.php" class="logout-btn">Logout</a>
+    </div>
 </nav>
 
 <div class="hero">
