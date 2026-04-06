@@ -96,7 +96,7 @@
 <body>
 
 <?php
-// PHP logic (模擬從數據庫抓取)
+// PHP logic 
 $id = isset($_GET['id']) ? $_GET['id'] : '1';
 $name = "Oak Dining Chair"; $price = 450.00; $img = "../Sample Furniture Images/1.png"; $cat = "Dining Room";
 $desc = "Handcrafted from solid European Oak, this chair is a testament to timeless design and structural integrity. Each piece is hand-finished with organic oils.";

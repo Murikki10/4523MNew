@@ -42,7 +42,6 @@
     overflow: hidden;
   }
 
-  /* 切換內容的容器 */
   .auth-form { display: none; animation: fadeIn 0.5s ease; }
   .auth-form.active { display: block; }
 
@@ -140,11 +139,9 @@
 
 <script>
   function showForm(formId) {
-    // 隱藏所有表單
     const forms = document.querySelectorAll('.auth-form');
     forms.forEach(form => form.classList.remove('active'));
     
-    // 顯示目標表單
     const targetForm = document.getElementById(formId);
     targetForm.classList.add('active');
   }

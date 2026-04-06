@@ -5,11 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Manage Orders - Premium Living Staff</title>
 <style>
-  /* --- 統一基礎佈局 (與 Furniture 頁面相同) --- */
   * { box-sizing: border-box; }
   body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; display: flex; background-color: #f4f7f6; min-height: 100vh; }
   
-  /* 統一 Sidebar 樣式  */
   .sidebar { width: 260px; background: #2c3e50; color: white; display: flex; flex-direction: column; position: fixed; height: 100%; }
   .sidebar .logo { font-size: 22px; text-align: center; font-weight: bold; padding: 30px 20px; background: #1a252f; border-bottom: 1px solid #34495e; }
   .sidebar .logo small { display: block; font-size: 14px; color: #1abc9c; margin-top: 5px; }
@@ -21,7 +19,6 @@
   .content { margin-left: 260px; flex: 1; padding: 40px; }
   h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; margin-top: 0; }
 
-  /* 訂單表格樣式 */
   .table-card { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
   table { width: 100%; border-collapse: collapse; }
   table th { text-align: left; padding: 12px 15px; background: #f8f9fa; color: #2c3e50; border-bottom: 2px solid #eee; }
@@ -33,7 +30,6 @@
   .status-2 { background: #dcfce7; color: #15803d; } 
   .status-3 { background: #fee2e2; color: #b91c1c; } 
 
-  /* Modal 強化設計 */
   .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); }
   .order-card { background: white; width: 600px; margin: 5% auto; border-radius: 8px; overflow: hidden; box-shadow: 0 15px 40px rgba(0,0,0,0.3); animation: fadeIn 0.3s; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }

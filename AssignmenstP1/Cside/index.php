@@ -20,31 +20,29 @@
   body { font-family: 'Inter', sans-serif; margin: 0; background-color: #fff; color: #333; line-height: 1.6; }
 
   /* --- Navigation --- */
-  /* --- 全局變量定義 (確保顏色一致) --- */
+
 :root {
-    --primary: #2c3e50;    /* 深藍色 */
-    --accent: #3498db;     /* 天藍色 */
-    --danger: #e74c3c;     /* 紅色 (用於 Logout) */
-    --border: #ececec;     /* 邊框顏色 */
+    --primary: #2c3e50;
+    --accent: #3498db;
+    --danger: #e74c3c;
+    --border: #ececec;
     --text-main: #333;
     --text-muted: #666;
 }
 
-/* --- Navbar 主體 --- */
 nav { 
     padding: 20px 8%; 
     display: flex; 
     justify-content: space-between; 
     align-items: center; 
     border-bottom: 1px solid var(--border);
-    background: rgba(255, 255, 255, 0.9); /* 半透明效果 */
-    backdrop-filter: blur(10px);          /* 毛玻璃效果 */
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(10px);
     position: sticky; 
     top: 0; 
     z-index: 1000;
 }
 
-/* --- Logo 樣式 --- */
 .logo { 
     font-family: 'Playfair Display', serif; 
     font-size: 24px; 
@@ -58,7 +56,6 @@ nav {
     color: var(--accent); 
 }
 
-/* --- 導航連結 --- */
 .nav-links { 
     display: flex; 
     align-items: center; 
@@ -77,7 +74,6 @@ nav {
     color: var(--accent); 
 }
 
-/* --- 購物車數量標籤 --- */
 .cart-count { 
     background: var(--accent); 
     color: white; 
@@ -89,7 +85,6 @@ nav {
     font-weight: 600;
 }
 
-/* --- 特別處理 Logout 按鈕 --- */
 .nav-links a.logout-btn {
     color: var(--danger);
     padding: 8px 15px;

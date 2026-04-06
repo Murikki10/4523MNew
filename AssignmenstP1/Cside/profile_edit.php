@@ -157,27 +157,21 @@
 
 <script>
   function openTab(evt, tabName) {
-    // 隱藏所有 tab 內容
     const tabContents = document.getElementsByClassName("tab-content");
     for (let i = 0; i < tabContents.length; i++) {
       tabContents[i].classList.remove("active");
     }
-
-    // 移除所有 menu-item 的 active 狀態
     const menuItems = document.getElementsByClassName("menu-item");
     for (let i = 0; i < menuItems.length; i++) {
       menuItems[i].classList.remove("active");
     }
 
-    // 顯示當前點擊的 tab 並加上 active 狀態
     document.getElementById(tabName).classList.add("active");
     evt.currentTarget.classList.add("active");
   }
 
-  // 處理從 Dashboard 跳過來時自動打開 Address tab
   window.onload = function() {
     if(window.location.hash === '#address') {
-      // 模擬點擊地址按鈕
       const addressBtn = document.querySelector('[onclick*="address"]');
       if(addressBtn) addressBtn.click();
     }
