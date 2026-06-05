@@ -1,46 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>lab1_2</title>
     <script>
-        function load(){
+        function load() {
             var canvas = document.getElementById('canvas');
             var ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0 ,canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
             var food = document.getElementById('foodName').value;
             var fontSize = document.getElementById('fontSize').value;
 
-            setTextStyle(ctx, fontSize +'px "Bodoni MT Black"','center', '100');
-            ctx.shadowBlur =10;
+            setTextStyle(ctx, fontSize + 'px "Bodoni MT Black"', 'center', '100');
+            ctx.shadowBlur = 10;
             ctx.shadowColor = 'black';
             ctx.shadowOffsetX = 10;
             ctx.shadowOffsetY = 5;
-            ctx.strokeText(food, canvas.width/2, 100);
+            ctx.strokeText(food, canvas.width / 2, 100);
 
-            setTextStyle(ctx,fontSize*1.5  +'px"Bodoni MT Black"','center', '100');
-            ctx.shadowBlur =0;
+            setTextStyle(ctx, fontSize * 1.5 + 'px "Bodoni MT Black"', 'center', '100');
+            ctx.shadowBlur = 0;
             ctx.shadowOffsetX = 0;
             ctx.shadowOffsetY = 0;
-            var txtWidth = ctx.measureText(food).width; 
-            var grad = ctx.createLinearGradient(100, 0 ,center, 0)
-            grad.addcolorStop(0, "yellow")
-            grad.addcolorStop(1, "Green")
-            ctx.fillStyle = grad;
-            ctx.strokeText(food, canvas.width/2, canvas.height/2 + 50);
+            var txtWidth = ctx.measureText(food).width;
+            var startX = (canvas.width / 2) - (txtWidth / 2);
+            var endX = (canvas.width / 2) + (txtWidth / 2);
+            var gradient = ctx.createLinearGradient(startX, 0, endX, 0);
+            gradient.addColorStop(0, 'yellow');
+            gradient.addColorStop(1, 'green');
+            ctx.fillStyle = gradient;
+            ctx.fillText(food, canvas.width / 2, canvas.height / 2 + 50);
 
         }
-        function setTextStyle(ctx, fontStyle, tAlign, tBaseline){
+        function setTextStyle(ctx, fontStyle, tAlign, tBaseline) {
             ctx.font = fontStyle;
             ctx.textAlign = tAlign;
             ctx.textBaseline = tBaseline;
         }
     </script>
 </head>
+
 <body onload="load()">
     <canvas id="canvas" width="500" height="300" style="color:1px solid black;"></canvas></br>
     Food Name: <input type="text" id="foodName" value="Cookie" /> </br>
-    Font size(px)20 <input type="range" id="fontSize" min="20" max="80" value="50" onchange="load();"/>80
+    Font size(px)20 <input type="range" id="fontSize" min="20" max="80" value="50" onchange="load();" />80
 </body>
+
 </html>
