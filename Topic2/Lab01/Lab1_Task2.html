@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 1 Task 2</title>
+    <link rel="stylesheet" type="text/css" href="styles/layout.css">
+    <script>
+        function showPic(whichpic) {
+            document.getElementById("placeholder").src = whichpic.href;
+            document.getElementById("description").firstChild.nodeValue = whichpic.title;
+        }
+        </script>
+</head>
+<body>
+
+    <h1> Photo Gallery</h1>
+    <u1>
+
+        <li><a href="images/fireworks.jpg" title="A fireworks display" onclick="showPic(this); return false;">Fireworks</a></li>
+        <li><a href="images/coffee.jpg" title="A cup of black coffee" onclick="showPic(this); return false;">Coffee</a></li>
+        <li><a href="images/rose.jpg" title="A red rose" onclick="showPic(this); return false;">Rose</a></li>
+        <li><a href="images/bigben.jpg" title="The famous clock" onclick="showPic(this); return false;">Big Ben</a></li>
+    </u1>
+    
+    <img id="placeholder" src="images/placeholder.gif" alt="My Image Gallery"/>
+    <p id="description">Choose an image from the above...</p>
+</body>
+</html>

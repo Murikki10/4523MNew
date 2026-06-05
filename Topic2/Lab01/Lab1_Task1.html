@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 1 Task 1</title>
+    <style>
+        #titleBlock {
+            color: white;
+            padding: 50px;
+            margin-block: 80px;
+        }
+    </style>
+    <script>
+        function swapBackground() {
+            obj=document.getElementById("titleBlock");
+            obj.style.backgroundColor = (obj.style.backgroundColor == "green") ? "coral" : "green";
+        }
+
+        function onClickL(obj) {
+            alert("Hello, " + document.getElementById("name").value + "!\nMeet you at this  " + obj.value + "!");
+                }
+
+    </script>
+</head>
+<body>
+    <h1>Lab 1 Task 1</h1>
+    <div id="titleBlock" style="background-color: green;">
+    <h2>Welcome to internet & Multimedia Applications Development</h2>
+    </div>
+    <input type="button" value="Swap Background between Green and Coral" onclick="swapBackground()">
+    <br>Name: <input type="text" id="name" value="Peter Pan">
+    <br>Choose your free time-slots?
+    <fieldset>
+        <input type="radio" name="time" value="Monday" onclick="onClickL(this)"> Monday
+        <input type="radio" name="time" value="Tuesday" onclick="onClickL(this)"> Tuesday
+        <input type="radio" name="time" value="Wednesday" onclick="onClickL(this)"> Wednesday
+        <input type="radio" name="time" value="Thursday" onclick="onClickL(this)"> Thursday
+        <input type="radio" name="time" value="Friday" onclick="onClickL(this)"> Friday
+    </fieldset>
+</html>

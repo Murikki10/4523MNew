@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Topic 3 - Lab 02 Task 2</title> 
+   <script>
+       function jsontext2table(){
+			 var jsonStr = document.getElementById("jsontext").innerHTML;
+			 var obj = JSON.parse(jsonStr);
+			 var tbl = '<table border="1"><tr><th>ID</th><th>Name</th><th>Password</th><th>Result</th></tr>';
+			 for(var i = 0; i < obj.length; i++) {
+				 tbl += '<tr><td>'+obj[i].sid+'</td><td>'+obj[i].sname+'</td><td>'+obj[i].spassword+'</td><td>'+obj[i].sresult+'</td></tr>';
+			 }
+			 tbl += '</table>';
+			 document.getElementById("jsontbl").innerHTML = tbl;
+	   }
+   </script>
+</head>
+<body>
+	<h2>Table of Students</h2>
+	
+	<div id="jsontext">
+	[{"sid":"1","sname":"Amy","spassword":"ac1234","sresult":"90"},
+	 {"sid":"2","sname":"Benny","spassword":"bt2468","sresult":"35"},
+	 {"sid":"3","sname":"Calvin","spassword":"ck1357","sresult":"80"},
+	 {"sid":"4","sname":"David","spassword":"df6789","sresult":"70"}
+	]
+	</div>
+	<input type="button" value="Use JSON.parse()" onclick="jsontext2table()"> 
+	<div id="jsontbl"></div>
+	 
+ 
+</body>
+</html>

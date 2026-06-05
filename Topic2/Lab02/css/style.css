@@ -1,0 +1,12 @@
+#tblStudent{
+    font-size: 20px;
+    border: 1px gray;
+    padding: 5px;
+    border-collapse: collapse;
+}
+
+#rowHead{
+    background-color: #ffe4ef;
+    color : orchid;
+    ;
+}

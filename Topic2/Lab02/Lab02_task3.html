@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+   <title>Topic 3 - Lab 02 Task 3</title>
+	 <link href="css/style.css" type="text/css" rel="stylesheet"/>
+     <script src="jquery/jquery-2.1.4.js"></script>
+     <script>
+     $(document).ready(function(){
+        $.ajax({
+            url: "Lab02_task1.php",
+            dataType: "Json",
+            success: function(result){
+                var tblRows = '';
+                for(i = 0; i < result.length; i++) {
+                    tblRows += '<tr><td>'+result[i].sid+'</td><td>'+result[i].sname+
+                        '</td><td>'+result[i].spassword+'</td><td>'+result[i].sresult+'</td></tr>';
+                }
+             document.getElementById("tblStudent").innerHTML+=tblRows;
+                },
+                    error: function (err) { 
+                        console.log("error" + err); 
+                }
+     })
+        });
+   </script>
+</head>
+<body>
+	 
+	<table id="tblStudent" border="1">    
+    <tr id="rowHead">
+        <th>ID</th>
+        <th>Name</th>
+        <th>Password</th>
+        <th>Mark</th>
+    </tr>        
+</table>
+</body>
+</html>
