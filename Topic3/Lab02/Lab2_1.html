@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lab 2_1</title>
+    <style>
+        #div1 {
+            background-color: lightblue;
+            border: 1px solid #000;
+        }
+    </style>
+    <script>
+        function drawCircles() {
+            var canvas = document.getElementById("div1");
+            var context = canvas.getContext("2d");
+
+            var r = parseInt(document.getElementById("radius1").value);
+            var numCircles = parseInt(document.getElementById("radius2").value);
+            context.clearRect(0, 0, canvas.width, canvas.height);
+            context.save();
+            context.translate(canvas.width / 2, canvas.height / 2);
+            
+            context.beginPath();
+            context.arc(0, 0, r, 0, 2 * Math.PI);
+            context.stroke();
+            var theta = (2 * Math.PI / numCircles) / 2; 
+            var rho = (r * Math.sin(theta)) / (1 - Math.sin(theta)); 
+            var stepAngle = 2 * Math.PI / numCircles;
+
+            for (var i = 0; i < numCircles; i++) {
+                context.beginPath();
+                context.arc(0, -(r + rho), rho, 0, 2 * Math.PI);
+                context.fillStyle = "yellow";
+                context.fill();
+                context.stroke();
+
+                context.rotate(stepAngle);
+            }
+            context.restore();
+        }
+    </script>
+</head>
+<body>
+    <canvas id="div1" width="400" height="400"></canvas><br>
+    Radius of big circle: <input type="text" id="radius1" value="60"><br>
+    Number of small circle: <input type="number" id="radius2" min="6" max="12" value="6"><br>
+    <button onclick="drawCircles()">Draw Circles</button>
+</body>
+</html>
