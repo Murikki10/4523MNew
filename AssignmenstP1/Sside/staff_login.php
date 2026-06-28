@@ -1,146 +1,166 @@
+<?php
+// Start the session to track user login status
+session_start();
+
+// Include database connection (adjust path based on folder structure)
+require_once('../conn.php');
+
+$error_message = '';
+
+// Process login form submission
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    $sname = $_POST['sname'];
+    $spassword = $_POST['spassword'];
+
+    // Use prepared statements to prevent SQL Injection
+    $stmt = $conn->prepare("SELECT sid, sname, srole FROM Staffs WHERE sname = ? AND spassword = ?");
+    $stmt->bind_param("ss", $sname, $spassword);
+    $stmt->execute();
+    $result = $stmt->get_result();
+
+    if ($result->num_rows > 0) {
+        // Fetch matching staff record
+        $row = $result->fetch_assoc();
+
+        // Store user details in session variables
+        $_SESSION['staff_id'] = $row['sid'];
+        $_SESSION['staff_name'] = $row['sname'];
+        $_SESSION['staff_role'] = $row['srole'];
+
+        // Redirect to staff dashboard page
+        header("Location: staff_index.php");
+        exit();
+    } else {
+        // Set error message if login credentials are invalid
+        $error_message = "Login failed! Invalid username or password.";
+    }
+    $stmt->close();
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Staff Login - Premium Living</title>
-<style>
-  /* --- Professional Login Layout --- */
-  * { box-sizing: border-box; }
-  body { 
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
-    margin: 0; 
-    height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-  }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Staff Login - Premium Living Furniture</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
 
-  .login-card {
-    background: white;
-    width: 100%;
-    max-width: 420px;
-    padding: 50px 40px;
-    border-radius: 15px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-    text-align: center;
-  }
+        .login-container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 320px;
+        }
 
-  .brand-logo {
-    font-size: 32px;
-    font-weight: bold;
-    color: #2c3e50;
-    margin-bottom: 5px;
-  }
-  .brand-logo span { color: #3498db; }
-  
-  .login-title {
-    color: #95a5a6;
-    font-size: 14px;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    margin-bottom: 35px;
-  }
+        .login-container h2 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 20px;
+        }
 
-  .input-group {
-    text-align: left;
-    margin-bottom: 25px;
-  }
-  .input-group label {
-    display: block;
-    font-size: 12px;
-    font-weight: bold;
-    color: #34495e;
-    margin-bottom: 8px;
-  }
-  .input-group input {
-    width: 100%;
-    padding: 12px 15px;
-    border: 2px solid #f1f4f8;
-    border-radius: 8px;
-    font-size: 15px;
-    background: #f8f9fa;
-    transition: 0.3s;
-  }
-  .input-group input:focus {
-    border-color: #3498db;
-    background: white;
-    outline: none;
-  }
+        .form-group {
+            margin-bottom: 15px;
+        }
 
-  .btn-login {
-    width: 100%;
-    padding: 14px;
-    background: #3498db;
-    color: white;
-    border: none;
-    border-radius: 8px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    transition: 0.3s;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
-  }
-  .btn-login:hover {
-    background: #2980b9;
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
-  }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
 
-  .footer-links {
-    margin-top: 30px;
-    font-size: 13px;
-    color: #bdc3c7;
-  }
-  .footer-links a {
-    color: #3498db;
-    text-decoration: none;
-  }
-</style>
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            border-color: #0056b3;
+            outline: none;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #0056b3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .btn:hover {
+            background: #004494;
+        }
+
+        .error {
+            color: #d9534f;
+            background: #fdf7f7;
+            border: 1px solid #d9534f;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+    </style>
 </head>
+
 <body>
 
-<div class="login-card">
-  <div class="brand-logo">Premium <span>Living</span></div>
-  <div class="login-title">Internal Staff Portal</div>
+    <div class="login-container">
+        <h2>Staff Portal Login</h2>
 
-  <!-- Form for UI Demo: Clicking button triggers redirection directly -->
-  <form onsubmit="redirectToDashboard(event)">
-    <div class="input-group">
-      <label>STAFF ID / EMAIL</label>
-      <input type="text" placeholder="Enter your ID" value="admin@premium.com" required>
+        <?php if ($error_message != '') {
+            echo "<div class='error'>$error_message</div>";
+        } ?>
+
+        <form method="POST" action="staff_login.php" onsubmit="return validateForm()">
+            <div class="form-group">
+                <label for="sname">Staff Name:</label>
+                <input type="text" id="sname" name="sname" placeholder="Enter staff name" required>
+            </div>
+            <div class="form-group">
+                <label for="spassword">Password:</label>
+                <input type="password" id="spassword" name="spassword" placeholder="Enter password" required>
+            </div>
+            <button type="submit" class="btn">Login</button>
+        </form>
     </div>
 
-    <div class="input-group">
-      <label>PASSWORD</label>
-      <input type="password" placeholder="Enter password" value="••••••••" required>
-    </div>
+    <script>
+        // Frontend input validation
+        function validateForm() {
+            var sname = document.getElementById('sname').value;
+            var spassword = document.getElementById('spassword').value;
 
-    <button type="submit" class="btn-login">Sign In to Dashboard</button>
-  </form>
-
-  <div class="footer-links">
-    <p>Forgot password? <a href="#">Contact IT Admin</a></p>
-    <p><a href="../Cside/index.html">← Return to Main Website</a></p>
-  </div>
-</div>
-
-<script>
-  function redirectToDashboard(e) {
-    e.preventDefault(); // Stop actual form submission
-    
-    // Smooth transition effect (optional)
-    const btn = document.querySelector('.btn-login');
-    btn.innerHTML = "Authenticating...";
-    btn.style.opacity = "0.7";
-    
-    // Redirect after a short delay for "demo realism"
-    setTimeout(() => {
-      window.location.href = 'staff_index.php';
-    }, 600);
-  }
-</script>
+            if (sname.trim() === "" || spassword.trim() === "") {
+                alert("Please fill in all fields!");
+                return false;
+            }
+            return true;
+        }
+    </script>
 
 </body>
+
 </html>
