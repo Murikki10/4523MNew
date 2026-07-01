@@ -18,9 +18,7 @@ if (!isset($conn)) {
 $success_message = '';
 $error_message = '';
 
-// ====================================================================================
-// 🚀 核心修復 1：處理「列表下拉選單 (Dropdown)」及「彈窗狀態選單」的訂單狀態變更與扣減庫存
-// ====================================================================================
+// Handle Actions Control Dropdown Updates & Modal Status Updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['oid']) && isset($_POST['ostatus']) && !isset($_POST['update_order_items'])) {
   $oid = intval($_POST['oid']);
   $new_status = intval($_POST['ostatus']);
@@ -28,14 +26,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['oid']) && isset($_POST
   if ($oid > 0) {
     mysqli_begin_transaction($conn);
     try {
-      // 1. Fetch current historical status to check transitions rules
       $status_stmt = $conn->prepare("SELECT ostatus FROM Orders WHERE oid = ?");
       $status_stmt->bind_param("i", $oid);
       $status_stmt->execute();
       $current_status = $status_stmt->get_result()->fetch_assoc()['ostatus'];
       $status_stmt->close();
 
-      // 2. Inventory Deduction Logic: Trigger only if transitioning into Approved state (status = 3)
       if ($new_status == 3 && $current_status != 3 && $current_status != 4 && $current_status != 5) {
         $items_stmt = $conn->prepare("SELECT fid, oqty FROM OrderFurnitures WHERE oid = ?");
         $items_stmt->bind_param("i", $oid);
@@ -75,50 +71,42 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['oid']) && isset($_POST
         }
       }
 
-      // 3. Update the core order record state flag
       $update_stmt = $conn->prepare("UPDATE Orders SET ostatus = ? WHERE oid = ?");
       $update_stmt->bind_param("ii", $new_status, $oid);
       $update_stmt->execute();
       $update_stmt->close();
 
       mysqli_commit($conn);
-      $success_message = "Order #" . $oid . " successfully updated to new transition stage status.";
+      $success_message = "Success: Order #" . $oid . " pipeline status updated successfully.";
     } catch (Exception $e) {
       mysqli_rollback($conn);
-      $error_message = "Transaction Failure! " . $e->getMessage();
+      $error_message = "Failure: " . $e->getMessage();
     }
   }
 }
 
-// ====================================================================================
-// 🚀 核心修復 2：處理彈窗 Modal 內「Save Order Changes」儲存修改家具明細與即時重新計算總額
-// ====================================================================================
+// Handle Modal Save Changes Updates
 if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items'])) {
   $oid = intval($_POST['oid']);
   $new_status = intval($_POST['ostatus']);
-  
   $posted_fids = isset($_POST['fids']) ? $_POST['fids'] : [];
   $posted_oqtys = isset($_POST['oqtys']) ? $_POST['oqtys'] : [];
 
   if ($oid > 0) {
     mysqli_begin_transaction($conn);
     try {
-      // 1. 先將該筆訂單原有的家具明細全部清除（覆蓋更新法）
       $clear_stmt = $conn->prepare("DELETE FROM OrderFurnitures WHERE oid = ?");
       $clear_stmt->bind_param("i", $oid);
       $clear_stmt->execute();
       $clear_stmt->close();
 
       $calculated_total = 0.00;
-
-      // 2. 重新將留下來的家具項目與新數量寫入 OrderFurnitures，並從 DB 抓價格算總額
       if (!empty($posted_fids)) {
         for ($i = 0; $i < count($posted_fids); $i++) {
           $fid = intval($posted_fids[$i]);
           $qty = intval($posted_oqtys[$i]);
 
           if ($qty > 0) {
-            // 從庫存型錄取得正確單價，防止前端價格被竄改
             $price_stmt = $conn->prepare("SELECT fprice FROM Furnitures WHERE fid = ?");
             $price_stmt->bind_param("i", $fid);
             $price_stmt->execute();
@@ -127,7 +115,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items']))
 
             $calculated_total += ($fprice * $qty);
 
-            // 重新插入明細
             $ins_item = $conn->prepare("INSERT INTO OrderFurnitures (oid, fid, oqty) VALUES (?, ?, ?)");
             $ins_item->bind_param("iii", $oid, $fid, $qty);
             $ins_item->execute();
@@ -136,14 +123,13 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items']))
         }
       }
 
-      // 3. 更新訂單的主表資料：包括新狀態（ostatus）與重新計算後的總金額（ototalamount）
       $update_main = $conn->prepare("UPDATE Orders SET ostatus = ?, ototalamount = ? WHERE oid = ?");
       $update_main->bind_param("idi", $new_status, $calculated_total, $oid);
       $update_main->execute();
       $update_main->close();
 
       mysqli_commit($conn);
-      $success_message = "Order #" . $oid . " configuration details and items catalog successfully updated.";
+      $success_message = "Success: Configuration for Order #" . $oid . " has been saved.";
     } catch (Exception $e) {
       mysqli_rollback($conn);
       $error_message = "Failed to update order details: " . $e->getMessage();
@@ -151,10 +137,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items']))
   }
 }
 
-// Fetch all orders logs records linked with dynamic inner joins to customer base logs records
-$query = "SELECT o.oid, o.odate, o.ototalamount, o.ostatus, o.odeliveraddress, c.cname, c.ctel 
+// Fetch Orders (排除 status = 1 嘅購物車單)
+$query = "SELECT o.oid, o.odate, o.ototalamount, o.ostatus, o.odeliveraddress, o.odeliverydate, c.cname, c.ctel 
           FROM Orders o 
           JOIN Customers c ON o.cid = c.cid 
+          WHERE o.ostatus != 1
           ORDER BY o.oid DESC";
 $result = mysqli_query($conn, $query);
 ?>
@@ -165,6 +152,38 @@ $result = mysqli_query($conn, $query);
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manage Orders - Premium Living Staff</title>
   <link rel="stylesheet" href="staff_style.css">
+  <style>
+    /* FLOATING TOAST NOTIFICATIONS */
+    .alert {
+        position: fixed; bottom: 25px; right: 25px; z-index: 99999;
+        min-width: 320px; max-width: 450px; padding: 16px 20px; border-radius: 8px;
+        font-weight: bold; font-size: 14px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(50px);
+        transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .alert.toast-show { opacity: 1; transform: translateX(0); }
+    .alert.toast-hide { opacity: 0; transform: translateY(-20px); transition: opacity 0.4s ease, transform 0.4s ease; }
+    .alert-success { background: #ffffff; color: #1e293b; border-left: 5px solid #2ecc71; border-top:none; border-right:none; border-bottom:none; }
+    .alert-danger { background: #ffffff; color: #1e293b; border-left: 5px solid #e74c3c; border-top:none; border-right:none; border-bottom:none; }
+
+    /* Timeline 樣式 */
+    .timeline-container { display: flex; justify-content: space-between; position: relative; margin: 20px 0 30px 0; padding: 0 10px; }
+    .timeline-container::before { content: ''; position: absolute; top: 15px; left: 40px; right: 40px; height: 3px; background: #e0e0e0; z-index: 1; }
+    .timeline-step { display: flex; flex-direction: column; align-items: center; position: relative; z-index: 2; width: 20%; }
+    .timeline-icon { width: 32px; height: 32px; border-radius: 50%; background: #fff; border: 3px solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 14px; transition: all 0.3s; }
+    .timeline-text { font-size: 12px; font-weight: bold; color: #95a5a6; margin-top: 6px; text-align: center; }
+    .timeline-step.active .timeline-icon { border-color: #3498db; background: #3498db; color: white; box-shadow: 0 0 10px rgba(52,152,219,0.5); }
+    .timeline-step.active .timeline-text { color: #3498db; }
+    .timeline-step.completed .timeline-icon { border-color: #2ecc71; background: #2ecc71; color: white; }
+    .timeline-step.completed .timeline-text { color: #2ecc71; }
+    
+    .material-box { background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 6px; padding: 12px; margin-top: 8px; font-size: 12px; }
+    .material-item { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px dotted #e2e8f0; }
+    .material-item:last-child { border-bottom: none; }
+    .stock-badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; }
+    .stock-ok { background: #e8f5e9; color: #2e7d32; }
+    .stock-warn { background: #ffebee; color: #c62828; }
+  </style>
 </head>
 <body>
 
@@ -189,18 +208,31 @@ $result = mysqli_query($conn, $query);
     <?php if ($error_message != '') echo "<div class='alert alert-danger'>$error_message</div>"; ?>
 
     <div class="form-card" style="padding: 15px 20px; margin-bottom: 25px;">
-      <div class="form-row" style="align-items: center; margin: 0; gap: 20px;">
-        <div class="form-group name-group" style="margin: 0; flex: 2;">
-          <label style="margin-bottom: 6px; font-size: 13px;">🔍 Search Customer Name</label>
-          <input type="text" id="order-search-input" placeholder="Type customer name to filter orders instantly..." onkeyup="filterAndSortOrders()">
+      <div class="form-row" style="align-items: center; margin: 0; gap: 15px; flex-wrap: wrap;">
+        <div class="form-group" style="margin: 0; flex: 2; min-width: 250px;">
+          <label style="margin-bottom: 6px; font-size: 13px;">🔍 Omni Search Box</label>
+          <input type="text" id="order-search-input" placeholder="Enter Order ID, Name, Tel, or Furniture Item..." onkeyup="filterAndSortOrders()">
         </div>
-        <div class="form-group price-group" style="margin: 0; flex: 1; max-width: 240px;">
+        <div class="form-group" style="margin: 0; flex: 1; min-width: 160px; max-width: 220px;">
+          <label style="margin-bottom: 6px; font-size: 13px;">🎯 Filter by Status</label>
+          <select id="order-status-filter" onchange="filterAndSortOrders()">
+            <option value="all">✨ Show All Statuses</option>
+            <option value="2">⏳ Processing</option>
+            <option value="3">✅ Approved</option>
+            <option value="4">🚚 Out for Delivery</option>
+            <option value="5">📦 Completed</option>
+            <option value="0">❌ Cancelled/Rejected</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin: 0; flex: 1; min-width: 160px; max-width: 220px;">
           <label style="margin-bottom: 6px; font-size: 13px;">🔀 Sort Order By</label>
           <select id="order-sort-select" onchange="filterAndSortOrders()">
             <option value="date-desc">Date: Newest First</option>
             <option value="date-asc">Date: Oldest First</option>
             <option value="amount-desc">Amount: High to Low</option>
             <option value="amount-asc">Amount: Low to High</option>
+            <option value="status-asc">Status: Processing First</option>
+            <option value="status-desc">Status: Completed First</option>
           </select>
         </div>
       </div>
@@ -210,36 +242,40 @@ $result = mysqli_query($conn, $query);
       <table>
         <thead>
           <tr>
-            <th>Order ID</th>
-            <th>Placement Date</th>
-            <th>Customer Account</th>
-            <th>Contact Phone</th>
-            <th>Total Amount</th>
-            <th>Pipeline Status</th>
-            <th>Actions Control</th>
+            <th>Order ID</th><th>Placement Date</th><th>Customer Account</th><th>Contact Phone</th><th>Total Amount</th><th>Pipeline Status</th><th>Actions Control</th>
           </tr>
         </thead>
         <tbody>
           <?php if ($result && mysqli_num_rows($result) > 0): ?>
             <?php while ($row = mysqli_fetch_assoc($result)): 
-              $items_q = "SELECT f.fid, f.fname, f.fprice, of.oqty 
+              $items_q = "SELECT of.oqty, f.fid, f.fname, f.fprice,
+                                 GROUP_CONCAT(CONCAT(m.mname, ':', fm.pmqty, ':', m.mqty, ':', m.munit) SEPARATOR '||') AS materials_recipe
                           FROM OrderFurnitures of 
                           JOIN Furnitures f ON of.fid = f.fid 
-                          WHERE of.oid = " . intval($row['oid']);
+                          LEFT JOIN FurnitureMaterials fm ON f.fid = fm.fid
+                          LEFT JOIN Materials m ON fm.mid = m.mid
+                          WHERE of.oid = " . intval($row['oid']) . "
+                          GROUP BY f.fid";
               $items_res = mysqli_query($conn, $items_q);
+              
               $items = [];
+              $furniture_names_arr = [];
               while($i = mysqli_fetch_assoc($items_res)) {
                   $items[] = $i;
+                  $furniture_names_arr[] = strtolower($i['fname']);
               }
+              $furniture_names_string = implode(' | ', $furniture_names_arr);
             ?>
               <tr class="order-data-row" 
                   data-oid="<?php echo $row['oid']; ?>"
+                  data-odate="<?php echo date('Y-m-d H:i', strtotime($row['odate'])); ?>"
                   data-cname="<?php echo htmlspecialchars(strtolower($row['cname']), ENT_QUOTES, 'UTF-8'); ?>" 
                   data-ctel="<?php echo htmlspecialchars($row['ctel'], ENT_QUOTES, 'UTF-8'); ?>"
                   data-caddr="<?php echo htmlspecialchars($row['odeliveraddress'], ENT_QUOTES, 'UTF-8'); ?>"
+                  data-ddate="<?php echo date('Y-m-d', strtotime($row['odeliverydate'])); ?>"
                   data-ostatus="<?php echo $row['ostatus']; ?>"
                   data-items='<?php echo json_encode($items); ?>'
-                  data-customer="<?php echo htmlspecialchars(strtolower($row['cname']), ENT_QUOTES, 'UTF-8'); ?>" 
+                  data-furnitures="<?php echo htmlspecialchars($furniture_names_string, ENT_QUOTES, 'UTF-8'); ?>"
                   data-timestamp="<?php echo strtotime($row['odate']); ?>" 
                   data-amount="<?php echo $row['ototalamount']; ?>"
                   onclick="handleRowClick(this)"
@@ -252,8 +288,7 @@ $result = mysqli_query($conn, $query);
                 <td>
                   <span class="badge status-<?php echo $row['ostatus']; ?>">
                     <?php
-                      if ($row['ostatus'] == 1) echo "🛒 Open/Cart";
-                      elseif ($row['ostatus'] == 2) echo "⏳ Processing";
+                      if ($row['ostatus'] == 2) echo "⏳ Processing";
                       elseif ($row['ostatus'] == 3) echo "✅ Approved";
                       elseif ($row['ostatus'] == 4) echo "🚚 Out for Delivery";
                       elseif ($row['ostatus'] == 5) echo "📦 Completed";
@@ -266,7 +301,6 @@ $result = mysqli_query($conn, $query);
                     <input type="hidden" name="oid" value="<?php echo $row['oid']; ?>">
                     <div class="status-wrapper" style="padding: 4px 8px; font-size:13px;">
                       <select name="ostatus" onchange="this.form.submit()">
-                        <option value="1" <?php if($row['ostatus'] == 1) echo 'selected'; ?>>🛒 Open/Cart</option>
                         <option value="2" <?php if($row['ostatus'] == 2) echo 'selected'; ?>>⏳ Processing</option>
                         <option value="3" <?php if($row['ostatus'] == 3) echo 'selected'; ?>>✅ Approved</option>
                         <option value="4" <?php if($row['ostatus'] == 4) echo 'selected'; ?>>🚚 Out for Delivery</option>
@@ -279,9 +313,7 @@ $result = mysqli_query($conn, $query);
               </tr>
             <?php endwhile; ?>
           <?php else: ?>
-            <tr>
-              <td colspan="7" style="text-align:center; color:#7f8c8d; padding:30px;">No operational customer orders records logged yet inside storage.</td>
-            </tr>
+            <tr><td colspan="7" style="text-align:center; color:#7f8c8d; padding:30px;">No operational customer orders records logged yet inside storage.</td></tr>
           <?php endif; ?>
         </tbody>
       </table>
@@ -289,60 +321,62 @@ $result = mysqli_query($conn, $query);
   </div>
 
   <div id="orderDetailModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 650px; margin: 5% auto;">
+    <div class="modal-content" style="max-width: 750px; margin: 3% auto;">
       <form action="manage_orders.php" method="POST">
         <input type="hidden" id="modal-hidden-oid" name="oid">
-        
         <div class="modal-header">
-          <h3>Order Details <span id="modal-oid" style="color:#3498db;"></span></h3>
+          <h3>Order Full Analysis Panel <span id="modal-oid" style="color:#3498db;"></span></h3>
           <span class="close-btn" onclick="closeOrderModal()">&times;</span>
         </div>
-
         <div style="padding: 10px 5px;">
-          <table style="width:100%; margin-bottom: 20px; font-size: 14px;">
+          <div class="timeline-container" id="modal-timeline">
+            <div class="timeline-step" id="step-2"><div class="timeline-icon">⏳</div><div class="timeline-text">Processing</div></div>
+            <div class="timeline-step" id="step-3"><div class="timeline-icon">✅</div><div class="timeline-text">Approved</div></div>
+            <div class="timeline-step" id="step-4"><div class="timeline-icon">🚚</div><div class="timeline-text">On Delivery</div></div>
+            <div class="timeline-step" id="step-5"><div class="timeline-icon">📦</div><div class="timeline-text">Completed</div></div>
+            <div class="timeline-step" id="step-0"><div class="timeline-icon">❌</div><div class="timeline-text">Cancelled</div></div>
+          </div>
+          <table style="width:100%; margin-bottom: 20px; font-size: 14px; background: #fdfdfd; padding: 15px; border-radius: 8px; border: 1px solid #f0f0f0;">
             <tr>
-              <td style="width:30%; padding:6px 0; color:#7f8c8d;">Customer Name:</td>
-              <td style="padding:6px 0; font-weight:bold;" id="modal-cname"></td>
+              <td style="width:25%; padding:6px 0; color:#7f8c8d;">Customer Name:</td><td style="padding:6px 0; font-weight:bold;" id="modal-cname"></td>
+              <td style="width:25%; padding:6px 0; color:#7f8c8d;">Order Date:</td><td style="padding:6px 0;" id="modal-odate"></td>
             </tr>
             <tr>
-              <td style="padding:6px 0; color:#7f8c8d;">Contact Phone:</td>
-              <td style="padding:6px 0;" id="modal-ctel"></td>
+              <td style="padding:6px 0; color:#7f8c8d;">Contact Phone:</td><td style="padding:6px 0; font-weight:bold; color:#34495e;" id="modal-ctel"></td>
+              <td style="padding:6px 0; color:#7f8c8d;">Est. Delivery:</td><td style="padding:6px 0; font-weight:bold; color:#e67e22;" id="modal-ddate"></td>
             </tr>
+            <tr><td style="padding:6px 0; color:#7f8c8d;">Delivery Address:</td><td style="padding:6px 0;" id="modal-caddr" colspan="3"></td></tr>
             <tr>
-              <td style="padding:6px 0; color:#7f8c8d;">Delivery Address:</td>
-              <td style="padding:6px 0;" id="modal-caddr"></td>
-            </tr>
-            <tr>
-              <td style="padding:6px 0; color:#7f8c8d;">Order Status:</td>
-              <td style="padding:6px 0;">
-                <select name="ostatus" id="modal-status-select" style="padding:5px; border-radius:4px;">
-                  <option value="1">🛒 Open/Cart</option>
-                  <option value="2">⏳ Processing</option>
-                  <option value="3">✅ Approved</option>
+              <td style="padding:6px 0; color:#7f8c8d;">Pipeline Management:</td>
+              <td style="padding:6px 0;" colspan="3">
+                <select name="ostatus" id="modal-status-select" style="padding:6px 12px; border-radius:4px; border:1px solid #cbd5e1; font-weight:bold;">
+                  <option value="2">⏳ Processing (Pending Review)</option>
+                  <option value="3">✅ Approved (Deduct Inventory)</option>
                   <option value="4">🚚 Out for Delivery</option>
-                  <option value="5">📦 Completed</option>
-                  <option value="0">❌ Cancel/Reject</option>
+                  <option value="5">📦 Completed (Finalized)</option>
+                  <option value="0">❌ Cancel/Reject Order</option>
                 </select>
               </td>
             </tr>
           </table>
-
           <div style="border-top: 1px solid #eee; padding-top: 15px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-              <h4 style="margin:0; color:#2c3e50;">Furniture Ordered Items</h4>
+              <h4 style="margin:0; color:#2c3e50; font-size:15px;">🛋️ Purchased Products Formula & Breakdown</h4>
               <button type="button" id="edit-items-btn" class="btn" style="padding:5px 12px; font-size:12px; background:#34495e; color:white; border:none; border-radius:4px;" onclick="toggleEditMode()">Edit Items</button>
             </div>
-            
-            <div id="modal-items-container" style="max-height: 200px; overflow-y: auto; margin-bottom:15px;">
-              </div>
-
-            <div style="display:flex; justify-content: flex-end; font-size:16px; font-weight:bold; border-top:1px solid #eee; padding-top:10px;">
-              <span>Grand Total: <span id="modal-total" style="color:#e74c3c;">$0.00</span></span>
+            <div id="modal-items-container" style="max-height: 280px; overflow-y: auto; margin-bottom:20px; padding-right:5px;"></div>
+            <div style="background: #f1f5f9; border-radius: 8px; padding: 15px; margin-bottom: 20px;">
+              <h5 style="margin:0 0 10px 0; color:#475569; font-size:13px;">📊 Cumulative Material Demand Summary</h5>
+              <div id="modal-total-materials-summary" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; font-size: 12px;"></div>
+            </div>
+            <div style="border-top:1px solid #eee; padding-top:12px; font-size:14px; color:#475569;">
+              <div style="display:flex; justify-content: flex-end; margin-bottom:4px;"><span style="width:150px; text-align:right;">Items Subtotal:</span><span id="modal-subtotal-price" style="width:100px; text-align:right; font-weight:bold;">$0.00</span></div>
+              <div style="display:flex; justify-content: flex-end; margin-bottom:4px;"><span style="width:150px; text-align:right;">Shipping & Handling:</span><span style="width:100px; text-align:right; color:#2ecc71; font-weight:bold;">FREE</span></div>
+              <div style="display:flex; justify-content: flex-end; font-size:18px; font-weight:bold; color:#b91c1c; margin-top:6px; border-top:1px dashed #eee; padding-top:6px;"><span style="width:150px; text-align:right;">Grand Total:</span><span id="modal-total" style="width:100px; text-align:right;">$0.00</span></div>
             </div>
           </div>
         </div>
-
-        <div style="margin-top: 25px; text-align: right; border-top: 1px solid #eee; padding-top:15px;">
+        <div style="margin-top: 20px; text-align: right; border-top: 1px solid #eee; padding-top:15px;">
           <button type="button" class="btn" style="background:#eee; color:#333; padding: 8px 20px; border:none; border-radius:4px;" onclick="closeOrderModal()">Cancel</button>
           <button type="submit" name="update_order_items" class="btn btn-primary" style="padding: 8px 25px; border:none; border-radius:4px; background:#3498db; color:white;">💾 Save Order Changes</button>
         </div>

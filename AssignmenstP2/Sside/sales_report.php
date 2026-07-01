@@ -15,16 +15,16 @@ if (!isset($conn)) {
   die("Fatal Error: Database connection variable '\$conn' is missing. Please check your db_conn.php!");
 }
 
-// --- 1. Calculate Summary Dashboard Metrics (Only include statuses: 3=Approved, 4=Pending delivery, 5=Completed) ---
+// --- 1. Calculate Summary Dashboard Metrics (🌐 核心修正：僅包含狀態 5 = Completed) ---
 
 // Get Total Revenue directly from successful orders
-$revenue_query = "SELECT SUM(ototalamount) AS grand_revenue FROM Orders WHERE ostatus IN (3, 4, 5)";
+$revenue_query = "SELECT SUM(ototalamount) AS grand_revenue FROM Orders WHERE ostatus = 5";
 $revenue_result = mysqli_query($conn, $revenue_query);
 $revenue_row = mysqli_fetch_assoc($revenue_result);
 $total_revenue_amount = !empty($revenue_row['grand_revenue']) ? floatval($revenue_row['grand_revenue']) : 0.00;
 
 // Get Total Items/Units Sold across all validated orders
-$units_query = "SELECT SUM(of.oqty) AS total_units FROM OrderFurnitures of JOIN Orders o ON of.oid = o.oid WHERE o.ostatus IN (3, 4, 5)";
+$units_query = "SELECT SUM(of.oqty) AS total_units FROM OrderFurnitures of JOIN Orders o ON of.oid = o.oid WHERE o.ostatus = 5";
 $units_result = mysqli_query($conn, $units_query);
 $units_row = mysqli_fetch_assoc($units_result);
 $total_units_sold = !empty($units_row['total_units']) ? intval($units_row['total_units']) : 0;
@@ -33,33 +33,35 @@ $total_units_sold = !empty($units_row['total_units']) ? intval($units_row['total
 $top_product_query = "SELECT f.fname FROM OrderFurnitures of 
                       JOIN Furnitures f ON of.fid = f.fid 
                       JOIN Orders o ON of.oid = o.oid 
-                      WHERE o.ostatus IN (3, 4, 5) 
+                      WHERE o.ostatus = 5 
                       GROUP BY f.fid 
                       ORDER BY SUM(of.oqty) DESC LIMIT 1";
 $top_product_result = mysqli_query($conn, $top_product_query);
 $top_product_name = "None";
 if ($top_product_result && mysqli_num_rows($top_product_result) > 0) {
   $top_product_row = mysqli_fetch_assoc($top_product_result);
-  $top_product_name = $top_product_name_row = $top_product_row['fname'];
+  $top_product_name = $top_product_row['fname'];
 }
 
-// --- 2. Fetch Detailed Sales Itemized Breakdown Row Lists ---
+// --- 2. Fetch Detailed Sales Itemized Breakdown Row Lists (🌐 核心修正：明細列表同樣僅鎖定狀態 5 = Completed) ---
 $report_query = "SELECT of.oid, of.fid, f.fname, f.fprice, of.oqty, (of.oqty * f.fprice) AS item_revenue
                  FROM OrderFurnitures of
                  JOIN Furnitures f ON of.fid = f.fid
                  JOIN Orders o ON of.oid = o.oid
-                 WHERE o.ostatus IN (3, 4, 5)
+                 WHERE o.ostatus = 5
                  ORDER BY of.oid DESC";
 $report_result = mysqli_query($conn, $report_query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sales Report - Premium Living Staff</title>
   <link rel="stylesheet" href="staff_style.css">
 </head>
+
 <body>
 
   <div class="sidebar">
@@ -146,4 +148,5 @@ $report_result = mysqli_query($conn, $report_query);
   </div>
 
 </body>
+
 </html>

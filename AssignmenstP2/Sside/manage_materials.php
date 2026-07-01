@@ -61,6 +61,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['restock_material'])) {
   }
 }
 
+if (isset($_GET['delete_id'])) {
+  $delete_mid = intval($_GET['delete_id']);
+
+  if ($delete_mid > 0) {
+    $check_stmt = $conn->prepare("SELECT COUNT(*) AS linked_furnitures FROM FurnitureMaterials WHERE mid = ?");
+    $check_stmt->bind_param("i", $delete_mid);
+    $check_stmt->execute();
+    $check_res = $check_stmt->get_result()->fetch_assoc();
+    $check_stmt->close();
+
+    if ($check_res['linked_furnitures'] > 0) {
+      $error_message = "Deletion Denied! This material cannot be removed because it is currently linked inside existing furniture formula composition recipes.";
+    } else {
+      $del_stmt = $conn->prepare("DELETE FROM Materials WHERE mid = ?");
+      $del_stmt->bind_param("i", $delete_mid);
+      
+      if ($del_stmt->execute()) {
+        $success_message = "Material ID #" . $delete_mid . " has been permanently deleted from inventory storage.";
+      } else {
+        $error_message = "Failed to execute database deletion workflow.";
+      }
+      $del_stmt->close();
+    }
+  }
+}
+
 // Fetch all inventory items from Materials table to render in dashboard view
 $query = "SELECT mid, mname, mqty, munit FROM Materials ORDER BY mid ASC";
 $result = mysqli_query($conn, $query);
@@ -115,7 +141,7 @@ $result = mysqli_query($conn, $query);
               <option value="block">block</option>
             </select>
           </div>
-          <button type="submit" name="add_material" class="btn btn-primary">➕ Register</button>
+          <button type="submit" name="add_material" class="btn btn-primary" style="align-self: flex-end; margin-bottom: 4px; height: 40px; padding: 0 25px;">➕ Register</button>
         </div>
       </form>
     </div>
@@ -137,7 +163,6 @@ $result = mysqli_query($conn, $query);
           <?php
           if ($result && mysqli_num_rows($result) > 0) {
             while ($row = mysqli_fetch_assoc($result)) {
-              // Determine stock healthy status using threshold level logic
               $is_low = ($row['mqty'] < 50);
               $qty_class = $is_low ? 'low-stock' : '';
               $status_markup = $is_low ? '<span class="low-stock">⚠️ Low Stock</span>' : '<span class="normal-stock">● Healthy</span>';
@@ -148,13 +173,18 @@ $result = mysqli_query($conn, $query);
               echo "<td class='" . $qty_class . "'>" . $row['mqty'] . "</td>";
               echo "<td>" . htmlspecialchars($row['munit']) . "</td>";
               echo "<td>" . $status_markup . "</td>";
+              
               echo "<td>
-                        <form method='POST' action='manage_materials.php' style='display:inline-flex; gap:8px; align-items:center; margin:0;'>
+                      <div style='display:inline-flex; align-items:center; gap:12px;'>
+                        <form method='POST' action='manage_materials.php' style='display:inline-flex; gap:6px; align-items:center; margin:0;'>
                             <input type='hidden' name='mid' value='" . $row['mid'] . "'>
-                            <input type='number' name='restock_amount' class='restock-input' value='50' min='1' required>
-                            <button type='submit' name='restock_material' class='btn btn-warning'>Restock</button>
+                            <input type='number' name='restock_amount' class='restock-input' value='50' min='1' style='width:65px; padding:5px; text-align:center; border:1px solid #ddd; border-radius:4px;' required>
+                            <button type='submit' name='restock_material' class='btn btn-warning' style='padding:6px 12px; font-size:13px;'>Restock</button>
                         </form>
-                      </td>";
+                        <a href='manage_materials.php?delete_id=" . $row['mid'] . "' class='btn btn-danger' style='padding:6px 14px; font-size:13px; text-decoration:none; text-align:center; border-radius:4px;' 
+                           onclick=\"return confirm('Are you sure you want to permanently delete this material from inventory records?')\">🗑️ Delete</a>
+                      </div>
+                    </td>";
               echo "</tr>";
             }
           } else {
@@ -166,5 +196,6 @@ $result = mysqli_query($conn, $query);
     </div>
   </div>
 
+  <script src="./script.js"></script>
 </body>
 </html>
