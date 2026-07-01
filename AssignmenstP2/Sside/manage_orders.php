@@ -1,811 +1,355 @@
 <?php
-// Force display errors for deep debugging phase
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
 // Start session to track staff authorization status
 session_start();
 
 // Security Guard: Redirect to login if session does not exist
 if (!isset($_SESSION['staff_id'])) {
-    header("Location: staff_login.php");
-    exit();
+  header("Location: staff_login.php");
+  exit();
 }
 
 // Include the existing database connection file
 require_once('../conn.php');
 
 if (!isset($conn)) {
-    die("Fatal Error: Database connection variable '\$conn' is missing. Please check your db_conn.php!");
+  die("Fatal Error: Database connection variable '\$conn' is missing. Please check your db_conn.php!");
 }
 
 $success_message = '';
 $error_message = '';
 
-// Handle Order Modification and Status/Inventory Management Lifecycle
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['save_order_changes'])) {
-    $oid = intval($_POST['oid']);
-    $new_status = intval($_POST['ostatus']);
+// ====================================================================================
+// 🚀 核心修復 1：處理「列表下拉選單 (Dropdown)」及「彈窗狀態選單」的訂單狀態變更與扣減庫存
+// ====================================================================================
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['oid']) && isset($_POST['ostatus']) && !isset($_POST['update_order_items'])) {
+  $oid = intval($_POST['oid']);
+  $new_status = intval($_POST['ostatus']);
 
-    $posted_fids = isset($_POST['fids']) ? $_POST['fids'] : [];
-    $posted_oqtys = isset($_POST['oqtys']) ? $_POST['oqtys'] : [];
-
-    // Begin Transaction to maintain absolute data integrity
+  if ($oid > 0) {
     mysqli_begin_transaction($conn);
-
     try {
-        // 1. Fetch current status and old item quantities to revert stock if previously approved
-        $old_status_stmt = $conn->prepare("SELECT ostatus FROM Orders WHERE oid = ?");
-        $old_status_stmt->bind_param("i", $oid);
-        $old_status_stmt->execute();
-        $old_status_res = $old_status_stmt->get_result();
+      // 1. Fetch current historical status to check transitions rules
+      $status_stmt = $conn->prepare("SELECT ostatus FROM Orders WHERE oid = ?");
+      $status_stmt->bind_param("i", $oid);
+      $status_stmt->execute();
+      $current_status = $status_stmt->get_result()->fetch_assoc()['ostatus'];
+      $status_stmt->close();
 
-        $old_status = 1;
-        if ($old_status_res->num_rows > 0) {
-            $old_status = $old_status_res->fetch_assoc()['ostatus'];
-        }
-        $old_status_stmt->close();
+      // 2. Inventory Deduction Logic: Trigger only if transitioning into Approved state (status = 3)
+      if ($new_status == 3 && $current_status != 3 && $current_status != 4 && $current_status != 5) {
+        $items_stmt = $conn->prepare("SELECT fid, oqty FROM OrderFurnitures WHERE oid = ?");
+        $items_stmt->bind_param("i", $oid);
+        $items_stmt->execute();
+        $items_result = $items_stmt->get_result();
+        $items_stmt->close();
 
-        // If previous state was Approved (3), return the old quantities of materials back to inventory
-        if ($old_status == 3) {
-            $old_items_stmt = $conn->prepare("SELECT fid, oqty FROM OrderFurnitures WHERE oid = ?");
-            $old_items_stmt->bind_param("i", $oid);
-            $old_items_stmt->execute();
-            $old_items_res = $old_items_stmt->get_result();
+        while ($item = $items_result->fetch_assoc()) {
+          $fid = $item['fid'];
+          $oqty = $item['oqty'];
 
-            while ($item = $old_items_res->fetch_assoc()) {
-                $old_fid = $item['fid'];
-                $old_qty = $item['oqty'];
+          $recipe_stmt = $conn->prepare("SELECT mid, pmqty FROM FurnitureMaterials WHERE fid = ?");
+          $recipe_stmt->bind_param("i", $fid);
+          $recipe_stmt->execute();
+          $recipe_result = $recipe_stmt->get_result();
+          $recipe_stmt->close();
 
-                $mat_stmt = $conn->prepare("SELECT mid, pmqty FROM FurnitureMaterials WHERE fid = ?");
-                $mat_stmt->bind_param("i", $old_fid);
-                $mat_stmt->execute();
-                $mat_res = $mat_stmt->get_result();
+          while ($recipe = $recipe_result->fetch_assoc()) {
+            $mid = $recipe['mid'];
+            $required_total = $recipe['pmqty'] * $oqty;
 
-                while ($mat = $mat_res->fetch_assoc()) {
-                    $return_qty = $mat['pmqty'] * $old_qty;
-                    $return_stmt = $conn->prepare("UPDATE Materials SET mqty = mqty + ? WHERE mid = ?");
-                    $return_stmt->bind_param("ii", $return_qty, $mat['mid']);
-                    $return_stmt->execute();
-                    $return_stmt->close();
-                }
-                $mat_stmt->close();
+            $stock_stmt = $conn->prepare("SELECT mname, mqty FROM Materials WHERE mid = ?");
+            $stock_stmt->bind_param("i", $mid);
+            $stock_stmt->execute();
+            $stock_data = $stock_stmt->get_result()->fetch_assoc();
+            $stock_stmt->close();
+
+            if ($stock_data['mqty'] < $required_total) {
+              throw new Exception("Inventory Shortage Error! Out of stock for material: " . $stock_data['mname']);
             }
-            $old_items_stmt->close();
+
+            $deduct_stmt = $conn->prepare("UPDATE Materials SET mqty = mqty - ? WHERE mid = ?");
+            $deduct_stmt->bind_param("ii", $required_total, $mid);
+            $deduct_stmt->execute();
+            $deduct_stmt->close();
+          }
         }
+      }
 
-        // 2. Clear out old items inside OrderFurnitures for this order to apply fresh edits safely
-        $delete_stmt = $conn->prepare("DELETE FROM OrderFurnitures WHERE oid = ?");
-        $delete_stmt->bind_param("i", $oid);
-        $delete_stmt->execute();
-        $delete_stmt->close();
+      // 3. Update the core order record state flag
+      $update_stmt = $conn->prepare("UPDATE Orders SET ostatus = ? WHERE oid = ?");
+      $update_stmt->bind_param("ii", $new_status, $oid);
+      $update_stmt->execute();
+      $update_stmt->close();
 
-        if (empty($posted_fids)) {
-            $new_status = 0;
-        }
+      mysqli_commit($conn);
+      $success_message = "Order #" . $oid . " successfully updated to new transition stage status.";
+    } catch (Exception $e) {
+      mysqli_rollback($conn);
+      $error_message = "Transaction Failure! " . $e->getMessage();
+    }
+  }
+}
 
-        $new_total_amount = 0.00;
-        $materials_needed = [];
+// ====================================================================================
+// 🚀 核心修復 2：處理彈窗 Modal 內「Save Order Changes」儲存修改家具明細與即時重新計算總額
+// ====================================================================================
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items'])) {
+  $oid = intval($_POST['oid']);
+  $new_status = intval($_POST['ostatus']);
+  
+  $posted_fids = isset($_POST['fids']) ? $_POST['fids'] : [];
+  $posted_oqtys = isset($_POST['oqtys']) ? $_POST['oqtys'] : [];
 
-        // 3. Insert active/modified items back and aggregate material needs
+  if ($oid > 0) {
+    mysqli_begin_transaction($conn);
+    try {
+      // 1. 先將該筆訂單原有的家具明細全部清除（覆蓋更新法）
+      $clear_stmt = $conn->prepare("DELETE FROM OrderFurnitures WHERE oid = ?");
+      $clear_stmt->bind_param("i", $oid);
+      $clear_stmt->execute();
+      $clear_stmt->close();
+
+      $calculated_total = 0.00;
+
+      // 2. 重新將留下來的家具項目與新數量寫入 OrderFurnitures，並從 DB 抓價格算總額
+      if (!empty($posted_fids)) {
         for ($i = 0; $i < count($posted_fids); $i++) {
-            $fid = intval($posted_fids[$i]);
-            $oqty = intval($posted_oqtys[$i]);
-            if ($oqty <= 0)
-                continue;
+          $fid = intval($posted_fids[$i]);
+          $qty = intval($posted_oqtys[$i]);
 
+          if ($qty > 0) {
+            // 從庫存型錄取得正確單價，防止前端價格被竄改
             $price_stmt = $conn->prepare("SELECT fprice FROM Furnitures WHERE fid = ?");
             $price_stmt->bind_param("i", $fid);
             $price_stmt->execute();
-            $price_res = $price_stmt->get_result();
-
-            $fprice = 0.00;
-            if ($price_res->num_rows > 0) {
-                $fprice = $price_res->fetch_assoc()['fprice'];
-            }
+            $fprice = $price_stmt->get_result()->fetch_assoc()['fprice'];
             $price_stmt->close();
 
-            $new_total_amount += ($fprice * $oqty);
+            $calculated_total += ($fprice * $qty);
 
-            $ins_item_stmt = $conn->prepare("INSERT INTO OrderFurnitures (oid, fid, oqty) VALUES (?, ?, ?)");
-            $ins_item_stmt->bind_param("iii", $oid, $fid, $oqty);
-            $ins_item_stmt->execute();
-            $ins_item_stmt->close();
-
-            $mat_stmt = $conn->prepare("SELECT mid, pmqty FROM FurnitureMaterials WHERE fid = ?");
-            $mat_stmt->bind_param("i", $fid);
-            $mat_stmt->execute();
-            $mat_res = $mat_stmt->get_result();
-            while ($mat = $mat_res->fetch_assoc()) {
-                $mid = $mat['mid'];
-                $required_units = $mat['pmqty'] * $oqty;
-                if (!isset($materials_needed[$mid])) {
-                    $materials_needed[$mid] = 0;
-                }
-                $materials_needed[$mid] += $required_units;
-            }
-            $mat_stmt->close();
+            // 重新插入明細
+            $ins_item = $conn->prepare("INSERT INTO OrderFurnitures (oid, fid, oqty) VALUES (?, ?, ?)");
+            $ins_item->bind_param("iii", $oid, $fid, $qty);
+            $ins_item->execute();
+            $ins_item->close();
+          }
         }
+      }
 
-        // 4. If the new intended status is Approved (3), execute stock limit checks
-        if ($new_status == 3 && !empty($materials_needed)) {
-            foreach ($materials_needed as $mid => $total_req) {
-                $check_stock_stmt = $conn->prepare("SELECT mname, mqty FROM Materials WHERE mid = ?");
-                $check_stock_stmt->bind_param("i", $mid);
-                $check_stock_stmt->execute();
-                $stock_res = $check_stock_stmt->get_result();
+      // 3. 更新訂單的主表資料：包括新狀態（ostatus）與重新計算後的總金額（ototalamount）
+      $update_main = $conn->prepare("UPDATE Orders SET ostatus = ?, ototalamount = ? WHERE oid = ?");
+      $update_main->bind_param("idi", $new_status, $calculated_total, $oid);
+      $update_main->execute();
+      $update_main->close();
 
-                if ($stock_res->num_rows > 0) {
-                    $stock_data = $stock_res->fetch_assoc();
-                    if ($stock_data['mqty'] < $total_req) {
-                        throw new Exception("Insufficient stock for raw material: " . $stock_data['mname'] . " (Required: " . $total_req . ", Available: " . $stock_data['mqty'] . ")");
-                    }
-
-                    $deduct_stmt = $conn->prepare("UPDATE Materials SET mqty = mqty - ? WHERE mid = ?");
-                    $deduct_stmt->bind_param("ii", $total_req, $mid);
-                    $deduct_stmt->execute();
-                    $deduct_stmt->close();
-                }
-                $check_stock_stmt->close();
-            }
-        }
-
-        // 5. Commit updates back into main Orders table
-        $update_order_stmt = $conn->prepare("UPDATE Orders SET ostatus = ?, ototalamount = ? WHERE oid = ?");
-        $update_order_stmt->bind_param("idi", $new_status, $new_total_amount, $oid);
-        $update_order_stmt->execute();
-        $update_order_stmt->close();
-
-        mysqli_commit($conn);
-        $success_message = "Order #" . $oid . " updates and inventory changes committed successfully.";
+      mysqli_commit($conn);
+      $success_message = "Order #" . $oid . " configuration details and items catalog successfully updated.";
     } catch (Exception $e) {
-        mysqli_rollback($conn);
-        $error_message = $e->getMessage();
+      mysqli_rollback($conn);
+      $error_message = "Failed to update order details: " . $e->getMessage();
     }
+  }
 }
 
-// Fetch records with secure LEFT JOIN syntax mapping layout
-$orders_query = "SELECT o.oid, o.odate, o.ototalamount, o.ostatus, o.odeliveraddress, 
-                        IFNULL(c.cname, 'Guest Customer') AS cname, 
-                        IFNULL(c.ctel, 'N/A') AS ctel 
-                 FROM Orders o 
-                 LEFT JOIN Customers c ON o.cid = c.cid 
-                 ORDER BY o.odate DESC";
-$orders_result = mysqli_query($conn, $orders_query);
-
-$all_orders = [];
-if ($orders_result) {
-    while ($row = mysqli_fetch_assoc($orders_result)) {
-        $oid = $row['oid'];
-        $row['items'] = [];
-
-        $items_query = "SELECT of.fid, of.oqty, f.fname, f.fprice 
-                        FROM OrderFurnitures of 
-                        LEFT JOIN Furnitures f ON of.fid = f.fid 
-                        WHERE of.oid = " . $oid;
-        $items_result = mysqli_query($conn, $items_query);
-        if ($items_result) {
-            while ($item = mysqli_fetch_assoc($items_result)) {
-                if (empty($item['fname'])) {
-                    $item['fname'] = "Unknown Product (ID: " . $item['fid'] . ")";
-                }
-                $row['items'][] = $item;
-            }
-        }
-        $all_orders[] = $row;
-    }
-}
+// Fetch all orders logs records linked with dynamic inner joins to customer base logs records
+$query = "SELECT o.oid, o.odate, o.ototalamount, o.ostatus, o.odeliveraddress, c.cname, c.ctel 
+          FROM Orders o 
+          JOIN Customers c ON o.cid = c.cid 
+          ORDER BY o.oid DESC";
+$result = mysqli_query($conn, $query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Orders - Premium Living Staff</title>
-    <style>
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            display: flex;
-            background-color: #f4f7f6;
-            min-height: 100vh;
-        }
-
-        .sidebar {
-            width: 260px;
-            background: #2c3e50;
-            color: white;
-            display: flex;
-            flex-direction: column;
-            position: fixed;
-            height: 100%;
-        }
-
-        .sidebar .logo {
-            font-size: 22px;
-            text-align: center;
-            font-weight: bold;
-            padding: 30px 20px;
-            background: #1a252f;
-            border-bottom: 1px solid #34495e;
-        }
-
-        .sidebar .logo small {
-            display: block;
-            font-size: 14px;
-            color: #1abc9c;
-            margin-top: 5px;
-        }
-
-        .sidebar ul.navbar {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-
-        .sidebar ul.navbar li a {
-            display: block;
-            padding: 18px 25px;
-            color: #ecf0f1;
-            text-decoration: none;
-            border-bottom: 1px solid #34495e;
-            transition: 0.3s;
-        }
-
-        .sidebar ul.navbar li a:hover,
-        .sidebar ul.navbar li a.active {
-            background: #3498db;
-            padding-left: 30px;
-        }
-
-        .sidebar ul.navbar.bottom-nav {
-            position: absolute;
-            bottom: 0;
-            width: 100%;
-        }
-
-        .content {
-            margin-left: 260px;
-            flex: 1;
-            padding: 40px;
-        }
-
-        h2 {
-            color: #2c3e50;
-            border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
-            margin-top: 0;
-        }
-
-        .alert {
-            padding: 15px;
-            border-radius: 6px;
-            margin-bottom: 20px;
-            font-weight: bold;
-        }
-
-        .alert-success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-
-        .alert-danger {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-
-        .table-card {
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        table th {
-            text-align: left;
-            padding: 12px 15px;
-            background: #f8f9fa;
-            color: #2c3e50;
-            border-bottom: 2px solid #eee;
-        }
-
-        table td {
-            padding: 15px;
-            border-bottom: 1px solid #ecf0f1;
-            cursor: pointer;
-        }
-
-        table tr:hover {
-            background: #f1f9ff;
-        }
-
-        .badge {
-            padding: 5px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .status-1 {
-            background: #e0f2fe;
-            color: #0369a1;
-        }
-
-        .status-2 {
-            background: #fef3c7;
-            color: #d97706;
-        }
-
-        .status-3 {
-            background: #dcfce7;
-            color: #15803d;
-        }
-
-        .status-0 {
-            background: #fee2e2;
-            color: #b91c1c;
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6);
-        }
-
-        .order-card {
-            background: white;
-            width: 600px;
-            margin: 5% auto;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.3);
-            animation: fadeIn 0.3s;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card-header {
-            background: #2c3e50;
-            color: white;
-            padding: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .card-body {
-            padding: 30px;
-        }
-
-        .status-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            background: #f8f9fa;
-            padding: 10px 15px;
-            border-radius: 8px;
-            border: 1px solid #eee;
-        }
-
-        .status-wrapper select {
-            border: none;
-            background: transparent;
-            font-weight: bold;
-            color: #2c3e50;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .detail-section {
-            margin-bottom: 25px;
-        }
-
-        .detail-section h4 {
-            color: #3498db;
-            margin-bottom: 15px;
-            border-left: 4px solid #3498db;
-            padding-left: 10px;
-            margin-top: 0;
-        }
-
-        .items-list-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-        }
-
-        .item-row {
-            background: #fff;
-            border: 1px solid #edf2f7;
-            border-radius: 8px;
-            padding: 12px;
-            margin-bottom: 10px;
-        }
-
-        .item-main {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 15px;
-        }
-
-        .item-info {
-            flex: 1;
-        }
-
-        .item-name {
-            display: block;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-
-        .item-price-detail {
-            font-size: 13px;
-            color: #7f8c8d;
-        }
-
-        .item-subtotal {
-            font-weight: bold;
-            color: #2ecc71;
-            width: 90px;
-            text-align: right;
-        }
-
-        .item-edit-controls {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px dashed #eee;
-            display: none;
-            justify-content: flex-end;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .edit-qty {
-            width: 70px;
-            padding: 5px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            text-align: center;
-        }
-
-        .btn-remove {
-            background: #ff4757;
-            color: white;
-            border: none;
-            padding: 6px 12px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 12px;
-            font-weight: bold;
-        }
-
-        .btn-small-edit {
-            font-size: 12px;
-            padding: 6px 15px;
-            background: #34495e;
-            color: white;
-            border-radius: 4px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .card-footer {
-            background: #f1f4f6;
-            padding: 20px;
-            text-align: right;
-        }
-
-        .btn {
-            padding: 10px 25px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-
-        .btn-primary {
-            background: #3498db;
-            color: white;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Orders - Premium Living Staff</title>
+  <link rel="stylesheet" href="staff_style.css">
 </head>
-
 <body>
 
-    <div class="sidebar">
-        <div class="logo">Premium Living<small>Staff Portal</small></div>
-        <ul class="navbar">
-            <li><a href="staff_index.php">📊 Dashboard</a></li>
-            <li><a href="manage_orders.php" class="active">📦 Manage Orders</a></li>
-            <li><a href="manage_furniture.php">🛋️ Manage Furniture</a></li>
-            <li><a href="manage_materials.php">🪵 Manage Materials</a></li>
-            <li><a href="sales_report.php">📈 Sales Report</a></li>
-        </ul>
-        <ul class="navbar bottom-nav">
-            <li><a href="logout.php">🚪 Logout</a></li>
-        </ul>
-    </div>
+  <div class="sidebar">
+    <div class="logo">Premium Living<small>Staff Portal</small></div>
+    <ul class="navbar">
+      <li><a href="staff_index.php">📊 Dashboard</a></li>
+      <li><a href="manage_orders.php" class="active">📦 Manage Orders</a></li>
+      <li><a href="manage_furniture.php">🛋️ Manage Furniture</a></li>
+      <li><a href="manage_materials.php">🪵 Manage Materials</a></li>
+      <li><a href="sales_report.php">📈 Sales Report</a></li>
+    </ul>
+    <ul class="navbar bottom-nav">
+      <li><a href="logout.php">🚪 Logout</a></li>
+    </ul>
+  </div>
 
-    <div class="content">
-        <h2>Manage Customer Orders</h2>
+  <div class="content">
+    <h2>Customer Orders Management</h2>
 
-        <?php if ($success_message != '')
-            echo "<div class='alert alert-success'>$success_message</div>"; ?>
-        <?php if ($error_message != '')
-            echo "<div class='alert alert-danger'>$error_message</div>"; ?>
+    <?php if ($success_message != '') echo "<div class='alert alert-success'>$success_message</div>"; ?>
+    <?php if ($error_message != '') echo "<div class='alert alert-danger'>$error_message</div>"; ?>
 
-        <div class="table-card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Order ID</th>
-                        <th>Order Date</th>
-                        <th>Customer Name</th>
-                        <th>Total</th>
-                        <th>Status</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <?php if (!empty($all_orders)): ?>
-                        <?php foreach ($all_orders as $order):
-                            $status_label = "Unknown";
-                            if ($order['ostatus'] == 1)
-                                $status_label = "Open";
-                            elseif ($order['ostatus'] == 2)
-                                $status_label = "Processing";
-                            elseif ($order['ostatus'] == 3)
-                                $status_label = "Approved";
-                            elseif ($order['ostatus'] == 0)
-                                $status_label = "Rejected";
-                            ?>
-                            <tr class="order-row" data-oid="<?php echo $order['oid']; ?>"
-                                data-cname="<?php echo htmlspecialchars($order['cname'], ENT_QUOTES, 'UTF-8'); ?>"
-                                data-ctel="<?php echo htmlspecialchars($order['ctel'], ENT_QUOTES, 'UTF-8'); ?>"
-                                data-caddr="<?php echo htmlspecialchars($order['odeliveraddress'], ENT_QUOTES, 'UTF-8'); ?>"
-                                data-ostatus="<?php echo $order['ostatus']; ?>"
-                                data-items="<?php echo htmlspecialchars(json_encode($order['items']), ENT_QUOTES, 'UTF-8'); ?>"
-                                onclick="handleRowClick(this)">
-                                <td><strong>#<?php echo $order['oid']; ?></strong></td>
-                                <td><?php echo date('Y-m-d H:i', strtotime($order['odate'])); ?></td>
-                                <td><?php echo htmlspecialchars($order['cname']); ?></td>
-                                <td style="color:#27ae60; font-weight:bold;">
-                                    $<?php echo number_format($order['ototalamount'], 2); ?></td>
-                                <td><span
-                                        class="badge status-<?php echo $order['ostatus']; ?>"><?php echo $status_label; ?></span>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php else: ?>
-                        <tr>
-                            <td colspan="5" style="text-align:center; color:#7f8c8d; padding:20px;">No orders found in the
-                                database.</td>
-                        </tr>
-                    <?php endif; ?>
-                </tbody>
-            </table>
+    <div class="form-card" style="padding: 15px 20px; margin-bottom: 25px;">
+      <div class="form-row" style="align-items: center; margin: 0; gap: 20px;">
+        <div class="form-group name-group" style="margin: 0; flex: 2;">
+          <label style="margin-bottom: 6px; font-size: 13px;">🔍 Search Customer Name</label>
+          <input type="text" id="order-search-input" placeholder="Type customer name to filter orders instantly..." onkeyup="filterAndSortOrders()">
         </div>
+        <div class="form-group price-group" style="margin: 0; flex: 1; max-width: 240px;">
+          <label style="margin-bottom: 6px; font-size: 13px;">🔀 Sort Order By</label>
+          <select id="order-sort-select" onchange="filterAndSortOrders()">
+            <option value="date-desc">Date: Newest First</option>
+            <option value="date-asc">Date: Oldest First</option>
+            <option value="amount-desc">Amount: High to Low</option>
+            <option value="amount-asc">Amount: Low to High</option>
+          </select>
+        </div>
+      </div>
     </div>
 
-    <div id="orderDetailModal" class="modal">
-        <form method="POST" action="manage_orders.php" class="order-card">
-            <input type="hidden" id="modal-hidden-oid" name="oid">
-
-            <div class="card-header">
-                <span>Order Details <strong id="modal-oid"></strong></span>
-                <span style="cursor:pointer; font-size:24px;" onclick="closeOrderModal()">&times;</span>
-            </div>
-
-            <div class="card-body">
-                <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:25px;">
-                    <div>
-                        <h4 style="margin:0; color:#7f8c8d; font-size:12px; text-transform:uppercase;">Customer</h4>
-                        <strong id="modal-cname" style="font-size:18px;"></strong><br>
-                        <span id="modal-ctel" style="color:#7f8c8d; font-size:14px;"></span>
+    <div class="table-card">
+      <table>
+        <thead>
+          <tr>
+            <th>Order ID</th>
+            <th>Placement Date</th>
+            <th>Customer Account</th>
+            <th>Contact Phone</th>
+            <th>Total Amount</th>
+            <th>Pipeline Status</th>
+            <th>Actions Control</th>
+          </tr>
+        </thead>
+        <tbody>
+          <?php if ($result && mysqli_num_rows($result) > 0): ?>
+            <?php while ($row = mysqli_fetch_assoc($result)): 
+              $items_q = "SELECT f.fid, f.fname, f.fprice, of.oqty 
+                          FROM OrderFurnitures of 
+                          JOIN Furnitures f ON of.fid = f.fid 
+                          WHERE of.oid = " . intval($row['oid']);
+              $items_res = mysqli_query($conn, $items_q);
+              $items = [];
+              while($i = mysqli_fetch_assoc($items_res)) {
+                  $items[] = $i;
+              }
+            ?>
+              <tr class="order-data-row" 
+                  data-oid="<?php echo $row['oid']; ?>"
+                  data-cname="<?php echo htmlspecialchars(strtolower($row['cname']), ENT_QUOTES, 'UTF-8'); ?>" 
+                  data-ctel="<?php echo htmlspecialchars($row['ctel'], ENT_QUOTES, 'UTF-8'); ?>"
+                  data-caddr="<?php echo htmlspecialchars($row['odeliveraddress'], ENT_QUOTES, 'UTF-8'); ?>"
+                  data-ostatus="<?php echo $row['ostatus']; ?>"
+                  data-items='<?php echo json_encode($items); ?>'
+                  data-customer="<?php echo htmlspecialchars(strtolower($row['cname']), ENT_QUOTES, 'UTF-8'); ?>" 
+                  data-timestamp="<?php echo strtotime($row['odate']); ?>" 
+                  data-amount="<?php echo $row['ototalamount']; ?>"
+                  onclick="handleRowClick(this)"
+                  style="cursor: pointer;">
+                <td><strong>#ORD-<?php echo str_pad($row['oid'], 4, '0', STR_PAD_LEFT); ?></strong></td>
+                <td><?php echo date('Y-m-d H:i', strtotime($row['odate'])); ?></td>
+                <td><strong><?php echo htmlspecialchars($row['cname']); ?></strong></td>
+                <td><?php echo htmlspecialchars($row['ctel']); ?></td>
+                <td style="font-weight: bold; color: #2c3e50;">$<?php echo number_format($row['ototalamount'], 2); ?></td>
+                <td>
+                  <span class="badge status-<?php echo $row['ostatus']; ?>">
+                    <?php
+                      if ($row['ostatus'] == 1) echo "🛒 Open/Cart";
+                      elseif ($row['ostatus'] == 2) echo "⏳ Processing";
+                      elseif ($row['ostatus'] == 3) echo "✅ Approved";
+                      elseif ($row['ostatus'] == 4) echo "🚚 Out for Delivery";
+                      elseif ($row['ostatus'] == 5) echo "📦 Completed";
+                      else echo "❌ Cancelled/Rejected";
+                    ?>
+                  </span>
+                </td>
+                <td>
+                  <form method="POST" action="manage_orders.php" style="display:inline-flex; gap:6px; align-items:center; margin:0;" onclick="event.stopPropagation();">
+                    <input type="hidden" name="oid" value="<?php echo $row['oid']; ?>">
+                    <div class="status-wrapper" style="padding: 4px 8px; font-size:13px;">
+                      <select name="ostatus" onchange="this.form.submit()">
+                        <option value="1" <?php if($row['ostatus'] == 1) echo 'selected'; ?>>🛒 Open/Cart</option>
+                        <option value="2" <?php if($row['ostatus'] == 2) echo 'selected'; ?>>⏳ Processing</option>
+                        <option value="3" <?php if($row['ostatus'] == 3) echo 'selected'; ?>>✅ Approved</option>
+                        <option value="4" <?php if($row['ostatus'] == 4) echo 'selected'; ?>>🚚 Out for Delivery</option>
+                        <option value="5" <?php if($row['ostatus'] == 5) echo 'selected'; ?>>📦 Completed</option>
+                        <option value="0" <?php if($row['ostatus'] == 0) echo 'selected'; ?>>❌ Cancel/Reject</option>
+                      </select>
                     </div>
-                    <div class="status-wrapper">
-                        <span style="font-size:12px; color:#95a5a6;">STATUS:</span>
-                        <select id="modal-status-select" name="ostatus">
-                            <option value="1">🔵 OPEN</option>
-                            <option value="2">🟡 PROCESSING</option>
-                            <option value="3">🟢 APPROVED</option>
-                            <option value="0">🔴 REJECTED</option>
-                        </select>
-                    </div>
-                </div>
-
-                <div class="detail-section">
-                    <div class="items-list-header">
-                        <h4>Order Items</h4>
-                        <button type="button" class="btn-small-edit" id="edit-items-btn" onclick="toggleEditMode()">Edit
-                            Items</button>
-                    </div>
-                    <div id="modal-items-container"></div>
-                </div>
-
-                <div class="detail-section"
-                    style="background:#f8f9fa; padding:15px; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
-                    <span style="font-weight:bold; color:#7f8c8d;">TOTAL AMOUNT</span>
-                    <span id="modal-total" style="font-size:24px; font-weight:bold; color:#27ae60;"></span>
-                </div>
-
-                <div class="detail-section">
-                    <h4>Shipping Address</h4>
-                    <p id="modal-caddr"
-                        style="font-size:14px; color:#2c3e50; background:#fff; border:1px solid #eee; padding:10px; border-radius:4px; margin:0;">
-                    </p>
-                </div>
-            </div>
-
-            <div class="card-footer">
-                <button type="button" class="btn" style="background:#eee;" onclick="closeOrderModal()">Cancel</button>
-                <button type="submit" name="save_order_changes" class="btn btn-primary">Save All Changes</button>
-            </div>
-        </form>
+                  </form>
+                </td>
+              </tr>
+            <?php endwhile; ?>
+          <?php else: ?>
+            <tr>
+              <td colspan="7" style="text-align:center; color:#7f8c8d; padding:30px;">No operational customer orders records logged yet inside storage.</td>
+            </tr>
+          <?php endif; ?>
+        </tbody>
+      </table>
     </div>
+  </div>
 
-    <script>
-        let currentOrderItems = [];
-        let editModeActive = false;
+  <div id="orderDetailModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 650px; margin: 5% auto;">
+      <form action="manage_orders.php" method="POST">
+        <input type="hidden" id="modal-hidden-oid" name="oid">
+        
+        <div class="modal-header">
+          <h3>Order Details <span id="modal-oid" style="color:#3498db;"></span></h3>
+          <span class="close-btn" onclick="closeOrderModal()">&times;</span>
+        </div>
 
-        function handleRowClick(rowElement) {
-            const orderData = {
-                oid: rowElement.getAttribute('data-oid'),
-                cname: rowElement.getAttribute('data-cname'),
-                ctel: rowElement.getAttribute('data-ctel'),
-                odeliveraddress: rowElement.getAttribute('data-caddr'),
-                ostatus: rowElement.getAttribute('data-ostatus'),
-                items: JSON.parse(rowElement.getAttribute('data-items'))
-            };
-            openOrderModal(orderData);
-        }
+        <div style="padding: 10px 5px;">
+          <table style="width:100%; margin-bottom: 20px; font-size: 14px;">
+            <tr>
+              <td style="width:30%; padding:6px 0; color:#7f8c8d;">Customer Name:</td>
+              <td style="padding:6px 0; font-weight:bold;" id="modal-cname"></td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0; color:#7f8c8d;">Contact Phone:</td>
+              <td style="padding:6px 0;" id="modal-ctel"></td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0; color:#7f8c8d;">Delivery Address:</td>
+              <td style="padding:6px 0;" id="modal-caddr"></td>
+            </tr>
+            <tr>
+              <td style="padding:6px 0; color:#7f8c8d;">Order Status:</td>
+              <td style="padding:6px 0;">
+                <select name="ostatus" id="modal-status-select" style="padding:5px; border-radius:4px;">
+                  <option value="1">🛒 Open/Cart</option>
+                  <option value="2">⏳ Processing</option>
+                  <option value="3">✅ Approved</option>
+                  <option value="4">🚚 Out for Delivery</option>
+                  <option value="5">📦 Completed</option>
+                  <option value="0">❌ Cancel/Reject</option>
+                </select>
+              </td>
+            </tr>
+          </table>
 
-        function openOrderModal(order) {
-            document.getElementById('modal-hidden-oid').value = order.oid;
-            document.getElementById('modal-oid').innerText = '#' + order.oid;
-            document.getElementById('modal-cname').innerText = order.cname;
-            document.getElementById('modal-ctel').innerText = order.ctel;
-            document.getElementById('modal-caddr').innerText = order.odeliveraddress;
-            document.getElementById('modal-status-select').value = order.ostatus;
-
-            currentOrderItems = Array.isArray(order.items) ? JSON.parse(JSON.stringify(order.items)) : [];
-            editModeActive = false;
-
-            const btn = document.getElementById("edit-items-btn");
-            if (btn) {
-                btn.innerText = "Edit Items";
-                btn.style.background = "#34495e";
-            }
-
-            renderModalItems();
-            document.getElementById('orderDetailModal').style.display = 'block';
-        }
-
-        function closeOrderModal() {
-            document.getElementById('orderDetailModal').style.display = 'none';
-        }
-
-        function renderModalItems() {
-            const container = document.getElementById('modal-items-container');
-            container.innerHTML = '';
-
-            if (currentOrderItems.length === 0) {
-                container.innerHTML = '<p style="color:#7f8c8d; font-size:14px; text-align:center; padding:10px;">No items inside this order.</p>';
-                calculateModalTotal();
-                return;
-            }
-
-            currentOrderItems.forEach((item, index) => {
-                const subtotal = item.fprice * item.oqty;
-                const displayStyle = editModeActive ? 'flex' : 'none';
-
-                const rowHTML = `
-            <div class="item-row" id="item-row-${index}">
-                <input type="hidden" name="fids[]" value="${item.fid}">
-                <div class="item-main">
-                    <div class="item-info">
-                        <span class="item-name">${item.fname}</span>
-                        <span class="item-price-detail">$${parseFloat(item.fprice).toFixed(2)} each</span>
-                    </div>
-                    <div class="item-subtotal" id="subtotal-text-${index}">$${subtotal.toFixed(2)}</div>
-                </div>
-                <div class="item-edit-controls" id="edit-controls-${index}" style="display: ${displayStyle}">
-                    <label style="font-size:13px; color:#555;">Qty: </label>
-                    <input type="number" class="edit-qty" name="oqtys[]" value="${item.oqty}" min="1" oninput="updateItemQty(${index}, this.value)">
-                    <button type="button" class="btn-remove" onclick="removeItem(${index})">Remove</button>
-                </div>
+          <div style="border-top: 1px solid #eee; padding-top: 15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+              <h4 style="margin:0; color:#2c3e50;">Furniture Ordered Items</h4>
+              <button type="button" id="edit-items-btn" class="btn" style="padding:5px 12px; font-size:12px; background:#34495e; color:white; border:none; border-radius:4px;" onclick="toggleEditMode()">Edit Items</button>
             </div>
-        `;
-                container.insertAdjacentHTML('beforeend', rowHTML);
-            });
+            
+            <div id="modal-items-container" style="max-height: 200px; overflow-y: auto; margin-bottom:15px;">
+              </div>
 
-            calculateModalTotal();
-        }
+            <div style="display:flex; justify-content: flex-end; font-size:16px; font-weight:bold; border-top:1px solid #eee; padding-top:10px;">
+              <span>Grand Total: <span id="modal-total" style="color:#e74c3c;">$0.00</span></span>
+            </div>
+          </div>
+        </div>
 
-        function toggleEditMode() {
-            const btn = document.getElementById("edit-items-btn");
-            editModeActive = !editModeActive;
+        <div style="margin-top: 25px; text-align: right; border-top: 1px solid #eee; padding-top:15px;">
+          <button type="button" class="btn" style="background:#eee; color:#333; padding: 8px 20px; border:none; border-radius:4px;" onclick="closeOrderModal()">Cancel</button>
+          <button type="submit" name="update_order_items" class="btn btn-primary" style="padding: 8px 25px; border:none; border-radius:4px; background:#3498db; color:white;">💾 Save Order Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
-            currentOrderItems.forEach((item, index) => {
-                const controls = document.getElementById(`edit-controls-${index}`);
-                if (controls) {
-                    controls.style.display = editModeActive ? "flex" : "none";
-                }
-            });
-
-            btn.innerText = editModeActive ? "Finish Editing" : "Edit Items";
-            btn.style.background = editModeActive ? "#27ae60" : "#34495e";
-        }
-
-        function updateItemQty(index, val) {
-            const quantity = parseInt(val);
-            if (isNaN(quantity) || quantity <= 0) return;
-
-            currentOrderItems[index].oqty = quantity;
-            const subtotal = currentOrderItems[index].fprice * quantity;
-            const subtotalText = document.getElementById(`subtotal-text-${index}`);
-            if (subtotalText) subtotalText.innerText = '$' + subtotal.toFixed(2);
-
-            calculateModalTotal();
-        }
-
-        function removeItem(index) {
-            if (confirm("Are you sure you want to remove this furniture product from this order?")) {
-                currentOrderItems.splice(index, 1);
-                renderModalItems();
-                if (editModeActive) {
-                    editModeActive = false;
-                    toggleEditMode();
-                }
-            }
-        }
-
-        function calculateModalTotal() {
-            let grandTotal = 0;
-            currentOrderItems.forEach(item => {
-                grandTotal += item.fprice * item.oqty;
-            });
-            const totalEl = document.getElementById('modal-total');
-            if (totalEl) totalEl.innerText = '$' + grandTotal.toFixed(2);
-        }
-
-        window.onclick = function (event) {
-            const modal = document.getElementById('orderDetailModal');
-            if (event.target == modal) {
-                closeOrderModal();
-            }
-        }
-    </script>
+  <script src="./manage_orders.js"></script>
 </body>
-
 </html>

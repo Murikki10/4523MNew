@@ -40,7 +40,7 @@ $top_product_result = mysqli_query($conn, $top_product_query);
 $top_product_name = "None";
 if ($top_product_result && mysqli_num_rows($top_product_result) > 0) {
   $top_product_row = mysqli_fetch_assoc($top_product_result);
-  $top_product_name = $top_product_row['fname'];
+  $top_product_name = $top_product_name_row = $top_product_row['fname'];
 }
 
 // --- 2. Fetch Detailed Sales Itemized Breakdown Row Lists ---
@@ -54,191 +54,12 @@ $report_result = mysqli_query($conn, $report_query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Sales Report - Premium Living Staff</title>
-  <style>
-    /* --- Shared Layout (Consistent with your current progress) --- */
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      margin: 0;
-      display: flex;
-      background-color: #f4f7f6;
-      min-height: 100vh;
-    }
-
-    .sidebar {
-      width: 260px;
-      background: #2c3e50;
-      color: white;
-      display: flex;
-      flex-direction: column;
-      position: fixed;
-      height: 100%;
-    }
-
-    .sidebar .logo {
-      font-size: 22px;
-      text-align: center;
-      font-weight: bold;
-      padding: 30px 20px;
-      background: #1a252f;
-      border-bottom: 1px solid #34495e;
-    }
-
-    .sidebar .logo small {
-      display: block;
-      font-size: 14px;
-      color: #1abc9c;
-      margin-top: 5px;
-    }
-
-    .sidebar ul.navbar {
-      list-style: none;
-      padding: 0;
-      margin: 0;
-    }
-
-    .sidebar ul.navbar li a {
-      display: block;
-      padding: 18px 25px;
-      color: #ecf0f1;
-      text-decoration: none;
-      border-bottom: 1px solid #34495e;
-      transition: 0.3s;
-    }
-
-    .sidebar ul.navbar li a:hover,
-    .sidebar ul.navbar li a.active {
-      background: #3498db;
-      padding-left: 30px;
-    }
-
-    .content {
-      margin-left: 260px;
-      flex: 1;
-      padding: 40px;
-    }
-
-    h2 {
-      color: #2c3e50;
-      border-bottom: 2px solid #3498db;
-      padding-bottom: 10px;
-      margin-top: 0;
-    }
-
-    /* --- Report Specific UI --- */
-    .stats-grid {
-      display: flex;
-      gap: 20px;
-      margin-bottom: 30px;
-    }
-
-    .stat-card {
-      background: white;
-      padding: 20px;
-      border-radius: 8px;
-      flex: 1;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-      text-align: center;
-      border-top: 4px solid #3498db;
-    }
-
-    .stat-card h3 {
-      margin: 0;
-      color: #7f8c8d;
-      font-size: 14px;
-      text-transform: uppercase;
-    }
-
-    .stat-card p {
-      margin: 10px 0 0;
-      font-size: 28px;
-      font-weight: bold;
-      color: #2c3e50;
-    }
-
-    .report-table-card {
-      background: white;
-      padding: 25px;
-      border-radius: 8px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-    }
-
-    table th,
-    table td {
-      padding: 15px;
-      text-align: left;
-      border-bottom: 1px solid #eee;
-    }
-
-    table th {
-      background: #f8f9fa;
-      color: #2c3e50;
-      font-weight: bold;
-      font-size: 13px;
-    }
-
-    .prod-img-mini {
-      width: 60px;
-      height: 60px;
-      border-radius: 4px;
-      object-fit: cover;
-      border: 1px solid #ddd;
-    }
-
-    .revenue {
-      color: #27ae60;
-      font-weight: bold;
-      font-size: 16px;
-    }
-
-    .total-row {
-      background: #f1f9ff;
-      font-weight: bold;
-    }
-
-    /* Print Styles */
-    @media print {
-      .sidebar {
-        display: none;
-      }
-
-      .content {
-        margin-left: 0;
-        padding: 0;
-      }
-
-      .btn-print {
-        display: none;
-      }
-    }
-
-    .btn-print {
-      background: #34495e;
-      color: white;
-      border: none;
-      padding: 10px 20px;
-      border-radius: 4px;
-      cursor: pointer;
-      float: right;
-      margin-bottom: 20px;
-    }
-  </style>
+  <link rel="stylesheet" href="staff_style.css">
 </head>
-
 <body>
 
   <div class="sidebar">
@@ -325,5 +146,4 @@ $report_result = mysqli_query($conn, $report_query);
   </div>
 
 </body>
-
 </html>
