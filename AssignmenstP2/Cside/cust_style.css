@@ -1,0 +1,74 @@
+/* ==========================================================================
+   Premium Living - Global Customer Portal Stylesheet (cust_style.css)
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   📌 CHAPTER 1: AUTHENTICATION PORTAL (Login / Register) 
+   -------------------------------------------------------------------------- */
+
+/* 🌐 核心修正：確保套用了 .pl-auth-wrapper 嘅頁面可以 100% 畫面上下左右完美置中 */
+body.pl-auth-wrapper {
+    background: #f1f5f9; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    min-height: 100vh; 
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* 浮動 TOAST 輕量化通知（右下角滑出） */
+.pl-auth-wrapper .alert {
+    position: fixed; 
+    bottom: 25px; 
+    right: 25px; 
+    z-index: 99999;
+    min-width: 320px; 
+    max-width: 450px; 
+    padding: 16px 20px; 
+    border-radius: 8px;
+    font-weight: bold; 
+    font-size: 14px; 
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+    display: flex; 
+    align-items: center; 
+    gap: 12px; 
+    opacity: 0; 
+    transform: translateX(50px);
+    transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
+                transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+.pl-auth-wrapper .alert.toast-show { opacity: 1; transform: translateX(0); }
+.pl-auth-wrapper .alert.toast-hide { opacity: 0; transform: translateY(-20px); transition: opacity 0.4s ease, transform 0.4s ease; }
+.pl-auth-wrapper .alert-success { background: #ffffff; color: #1e293b; border-left: 5px solid #2ecc71; border-top:none; border-right:none; border-bottom:none; }
+.pl-auth-wrapper .alert-danger { background: #ffffff; color: #1e293b; border-left: 5px solid #e74c3c; border-top:none; border-right:none; border-bottom:none; }
+
+/* 登入註冊翻轉主容器 */
+.pl-auth-wrapper .login-container {
+    background: #ffffff; 
+    padding: 40px; 
+    border-radius: 12px; 
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.08);
+    width: 100%; 
+    max-width: 420px; 
+    box-sizing: border-box;
+    transition: all 0.3s ease-in-out;
+}
+.pl-auth-wrapper .login-header { text-align: center; margin-bottom: 25px; }
+.pl-auth-wrapper .login-header h2 { margin: 0; color: #1e293b; font-size: 26px; font-weight: 800; }
+.pl-auth-wrapper .login-header p { margin: 8px 0 0 0; color: #64748b; font-size: 14px; }
+
+.pl-auth-wrapper .form-group { margin-bottom: 18px; display: flex; flex-direction: column; }
+.pl-auth-wrapper .form-group label { font-size: 13px; font-weight: bold; color: #475569; margin-bottom: 6px; text-align: left; }
+.pl-auth-wrapper .form-group input { padding: 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; transition: border-color 0.2s; }
+.pl-auth-wrapper .form-group input:focus { border-color: #3498db; outline: none; }
+
+.pl-auth-wrapper .btn-action { background: #3498db; color: white; border: none; padding: 14px; border-radius: 6px; font-size: 15px; font-weight: bold; cursor: pointer; width: 100%; transition: background 0.2s; margin-top: 5px; }
+.pl-auth-wrapper .btn-action:hover { background: #2980b9; }
+
+.pl-auth-wrapper .toggle-link { text-align: center; margin-top: 25px; font-size: 13px; color: #64748b; }
+.pl-auth-wrapper .toggle-link button { background: none; border: none; color: #3498db; font-weight: bold; cursor: pointer; font-size: 13px; text-decoration: underline; padding: 0; margin-left: 3px; }
+
+/* --------------------------------------------------------------------------
+   📌 CHAPTER 2: FUTURE MODULES (Catalog, Cart, Orders...) 
+   -------------------------------------------------------------------------- */

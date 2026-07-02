@@ -1,151 +1,160 @@
+<?php
+session_start();
+
+if (isset($_SESSION['cust_id'])) {
+    header("Location: index.php");
+    exit();
+}
+
+require_once('../conn.php'); 
+
+if (!isset($conn)) {
+    die("Fatal Error: Database connection variable '\$conn' is missing. Please check your db_conn.php!");
+}
+
+$success_message = '';
+$error_message = '';
+$active_panel = 'login'; 
+
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cust_login'])) {
+    $active_panel = 'login';
+    $cname = trim($_POST['cname']);
+    $password = trim($_POST['cpassword']);
+
+    if (!empty($cname) && !empty($password)) {
+        $stmt = $conn->prepare("SELECT cid, cname, cpassword FROM Customers WHERE cname = ? LIMIT 1");
+        $stmt->bind_param("s", $cname);
+        $stmt->execute();
+        $result = $stmt->get_result();
+
+        if ($result && $result->num_rows > 0) {
+            $row = $result->fetch_assoc();
+            if ($password === $row['cpassword'] || password_verify($password, $row['cpassword'])) {
+                $_SESSION['cust_id'] = $row['cid'];
+                $_SESSION['cust_name'] = $row['cname'];
+                header("Location: index.php");
+                exit();
+            } else {
+                $error_message = "Failure: Invalid password! Please double check your entries.";
+            }
+        } else {
+            $error_message = "Failure: Customer Name not found! Please register first.";
+        }
+        $stmt->close();
+    } else {
+        $error_message = "Failure: Please fill in all mandatory fields.";
+    }
+}
+
+// 🚀 處理註冊 (Name Register + Dummy Defs)
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['cust_register'])) {
+    $active_panel = 'register'; 
+    $cname = trim($_POST['reg_cname']);
+    $password = trim($_POST['reg_cpassword']);
+    $confirm_password = trim($_POST['reg_cconfirm_password']);
+
+    if (!empty($cname) && !empty($password) && !empty($confirm_password)) {
+        if ($password !== $confirm_password) {
+            $error_message = "Failure: Passwords do not match! Please check your typing.";
+        } else {
+            $check_stmt = $conn->prepare("SELECT cid FROM Customers WHERE cname = ? LIMIT 1");
+            $check_stmt->bind_param("s", $cname);
+            $check_stmt->execute();
+            $check_res = $check_stmt->get_result();
+            $check_stmt->close();
+
+            if ($check_res && $check_res->num_rows > 0) {
+                $error_message = "Failure: The Name '" . htmlspecialchars($cname) . "' is already taken! Please choose another name.";
+            } else {
+                $dummy_ctel = ''; 
+                $dummy_caddr = 'Pending Update';
+
+                $ins_stmt = $conn->prepare("INSERT INTO Customers (cname, cpassword, ctel, caddr) VALUES (?, ?, ?, ?)");
+                $ins_stmt->bind_param("ssss", $cname, $password, $dummy_ctel, $dummy_caddr);
+
+                if ($ins_stmt->execute()) {
+                    $success_message = "Success: Account registered successfully! You can login now.";
+                    $active_panel = 'login'; 
+                } else {
+                    $error_message = "Failure: Database processing error during registration.";
+                }
+                $ins_stmt->close();
+            }
+        }
+    } else {
+        $error_message = "Failure: Name and both Password fields are mandatory.";
+    }
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Account | Premium Living</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-<style>
-  :root {
-    --primary-color: #2c3e50;
-    --accent-color: #3498db;
-    --text-muted: #7f8c8d;
-    --border: #eee;
-  }
-
-  * { box-sizing: border-box; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-  
-  body { 
-    font-family: 'Inter', sans-serif; 
-    margin: 0; 
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-    background-color: #f4f7f6;
-    background-image: linear-gradient(rgba(255,255,255,0.8), rgba(255,255,255,0.8)), 
-                      url('https://images.unsplash.com/photo-1493663284031-b7e3aefcae8e?auto=format&fit=crop&q=80&w=1500');
-    background-size: cover;
-    background-position: center;
-    overflow: hidden;
-  }
-
-  .login-card {
-    background: rgba(255, 255, 255, 0.9);
-    backdrop-filter: blur(15px);
-    width: 100%;
-    max-width: 420px;
-    padding: 50px 40px;
-    border-radius: 24px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .auth-form { display: none; animation: fadeIn 0.5s ease; }
-  .auth-form.active { display: block; }
-
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .logo { 
-    font-family: 'Playfair Display', serif; font-size: 28px; font-weight: bold; 
-    color: var(--primary-color); text-decoration: none; display: block; text-align: center; margin-bottom: 25px;
-  }
-  .logo span { color: var(--accent-color); }
-
-  h2 { font-family: 'Playfair Display', serif; font-size: 24px; color: var(--primary-color); margin: 0 0 10px; text-align: center; }
-  p.subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; text-align: center; }
-
-  .form-group { text-align: left; margin-bottom: 18px; }
-  .form-group label { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; letter-spacing: 1px; }
-  .form-group input { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 12px; font-size: 14px; outline: none; }
-  .form-group input:focus { border-color: var(--accent-color); box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.1); }
-
-  .btn-primary { width: 100%; padding: 14px; background: var(--primary-color); color: white; border: none; border-radius: 12px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 10px; }
-  .btn-primary:hover { background: var(--accent-color); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(52, 152, 219, 0.3); }
-
-  .extra-links { margin-top: 25px; font-size: 13px; color: var(--text-muted); text-align: center; line-height: 1.8; }
-  .extra-links a { color: var(--accent-color); text-decoration: none; font-weight: 600; cursor: pointer; }
-  .extra-links a:hover { text-decoration: underline; }
-
-  .back-to-login { display: inline-flex; align-items: center; gap: 5px; color: var(--text-muted); font-size: 13px; text-decoration: none; cursor: pointer; margin-bottom: 20px; }
-  .back-to-login:hover { color: var(--primary-color); }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Access Portal - Premium Living</title>
+  <link rel="stylesheet" href="staff/staff_style.css">
+  <link rel="stylesheet" href="cust_style.css">
 </head>
-<body>
+<body class="pl-auth-wrapper">
 
-<div class="login-card">
-  <a href="index.php" class="logo">Premium<span>Living</span></a>
+  <?php if ($success_message != '') echo "<div class='alert alert-success'>$success_message</div>"; ?>
+  <?php if ($error_message != '') echo "<div class='alert alert-danger'>$error_message</div>"; ?>
 
-  <div id="loginForm" class="auth-form active">
-    <h2>Welcome Back</h2>
-    <p class="subtitle">Enter your details to access your account</p>
-    <form action="dashboard.php" method="POST">
-      <div class="form-group">
-        <label>Email Address</label>
-        <input type="email" placeholder="name@example.com" required>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" placeholder="••••••••" required>
-      </div>
-      <button type="submit" class="btn-primary">Sign In</button>
-    </form>
-    <div class="extra-links">
-      <a onclick="showForm('forgotForm')">Forgot password?</a><br>
-      Don't have an account? <a onclick="showForm('registerForm')">Create Account</a>
-    </div>
-  </div>
-
-  <div id="registerForm" class="auth-form">
-    <h2>Join Us</h2>
-    <p class="subtitle">Create an account for a premium experience</p>
-    <form action="dashboard.php" method="POST">
-      <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" placeholder="Alex Wong" required>
-      </div>
-      <div class="form-group">
-        <label>Email Address</label>
-        <input type="email" placeholder="name@example.com" required>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" placeholder="Create a password" required>
-      </div>
-      <button type="submit" class="btn-primary">Create Account</button>
-    </form>
-    <div class="extra-links">
-      Already have an account? <a onclick="showForm('loginForm')">Sign In</a>
-    </div>
-  </div>
-
-  <div id="forgotForm" class="auth-form">
-    <a onclick="showForm('loginForm')" class="back-to-login">← Back to Login</a>
-    <h2>Reset Password</h2>
-    <p class="subtitle">Enter your email and we'll send you instructions</p>
-    <form onsubmit="event.preventDefault(); alert('Reset link sent to your email!'); showForm('loginForm');">
-      <div class="form-group">
-        <label>Email Address</label>
-        <input type="email" placeholder="name@example.com" required>
-      </div>
-      <button type="submit" class="btn-primary">Send Reset Link</button>
-    </form>
-  </div>
-</div>
-
-<script>
-  function showForm(formId) {
-    const forms = document.querySelectorAll('.auth-form');
-    forms.forEach(form => form.classList.remove('active'));
+  <div class="login-container">
     
-    const targetForm = document.getElementById(formId);
-    targetForm.classList.add('active');
-  }
-</script>
+    <div id="login-panel" style="display: <?php echo ($active_panel === 'login') ? 'block' : 'none'; ?>;">
+      <div class="login-header">
+        <h2>Premium Living</h2>
+        <p>Welcome back! Please login with your name</p>
+      </div>
 
+      <form method="POST" action="login.php">
+        <div class="form-group">
+          <label>Customer Name</label>
+          <input type="text" name="cname" placeholder="Enter your registered name" required>
+        </div>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="cpassword" placeholder="••••••••" required>
+        </div>
+        <button type="submit" name="cust_login" class="btn-action">Secure Login 🔐</button>
+      </form>
+
+      <div class="toggle-link">
+        Don't have an account? <button type="button" id="pl-to-register-btn">Create Account Now</button>
+      </div>
+    </div>
+
+    <div id="register-panel" style="display: <?php echo ($active_panel === 'register') ? 'block' : 'none'; ?>;">
+      <div class="login-header">
+        <h2>Join Premium Living</h2>
+        <p>Create a new account with your name</p>
+      </div>
+      
+      <form method="POST" action="login.php" id="pl-register-form">
+        <div class="form-group">
+          <label>Choose Login Name *</label>
+          <input type="text" name="reg_cname" placeholder="Create your unique login name" required>
+        </div>
+        <div class="form-group">
+          <label>Secure Password *</label>
+          <input type="password" id="reg-password" name="reg_cpassword" placeholder="Min 6 characters" required>
+        </div>
+        <div class="form-group">
+          <label>Confirm Password *</label>
+          <input type="password" id="reg-confirm-password" name="reg_cconfirm_password" placeholder="Re-type your password" required>
+        </div>
+        
+        <button type="submit" name="cust_register" class="btn-action" style="background: #2ecc71;">🚀 Register Now</button>
+      </form>
+
+      <div class="toggle-link">
+        Already have an account? <button type="button" id="pl-to-login-btn">Back to Login</button>
+      </div>
+    </div>
+
+  </div>
+
+  <script src="cust_script.js"></script>
 </body>
 </html>
