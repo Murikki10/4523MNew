@@ -1,3 +1,134 @@
+<?php
+// 1. 啟動 Session 機制核對客人授權狀態
+session_start();
+
+// Security Guard: 如果客人未登入，絕對不准訪問設定頁，立刻踢回登入頁
+if (!isset($_SESSION['cust_id'])) {
+    header("Location: login.php");
+    exit();
+}
+
+// 2. 引入上層資料庫連線檔案
+require_once('../conn.php');
+
+if (!isset($conn)) {
+    die("Fatal Error: Database connection variable '\$conn' is missing. Please check your db_conn.php!");
+}
+
+$cid = $_SESSION['cust_id'];
+$success_message = '';
+$error_message = '';
+$active_tab = 'profile'; // 用於控制重新整理後回到哪一個表單頁籤
+
+// ====================================================================================
+// 🚀 表單處理核心：接收三大 Form 異步分流提交
+// ====================================================================================
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    
+    // 【表單 A】：更新個人基本資料 (Full Name & Phone)
+    if (isset($_POST['update_profile'])) {
+        $active_tab = 'profile';
+        $new_name = trim($_POST['cname']);
+        $new_tel = trim($_POST['ctel']);
+
+        if (!empty($new_name)) {
+            // 檢查：防止將名字改成已被其他人佔用的名字
+            $check_stmt = $conn->prepare("SELECT cid FROM Customers WHERE cname = ? AND cid != ? LIMIT 1");
+            $check_stmt->bind_param("si", $new_name, $cid);
+            $check_stmt->execute();
+            $check_res = $check_stmt->get_result();
+            $check_stmt->close();
+
+            if ($check_res && $check_res->num_rows > 0) {
+                $error_message = "Failure: The Name '" . htmlspecialchars($new_name) . "' is already taken by another member.";
+            } else {
+                // 安全更新：同步更新 Customers 表格
+                $up_stmt = $conn->prepare("UPDATE Customers SET cname = ?, ctel = ? WHERE cid = ?");
+                $up_stmt->bind_param("ssi", $new_name, $new_tel, $cid);
+                if ($up_stmt->execute()) {
+                    $_SESSION['cust_name'] = $new_name; // 同步更新 Session 頂部導覽列的名字
+                    $success_message = "Success: Personal Information saved updates successfully.";
+                } else {
+                    $error_message = "Failure: Database processing error during profile update.";
+                }
+                $up_stmt->close();
+            }
+        } else {
+            $error_message = "Failure: Full Name cannot be left completely empty.";
+        }
+    }
+
+    // 【表單 B】：更新主要送貨地址 (Shipping Address)
+    if (isset($_POST['update_address'])) {
+        $active_tab = 'address';
+        $new_addr = trim($_POST['caddr']);
+
+        if (!empty($new_addr)) {
+            $up_stmt = $conn->prepare("UPDATE Customers SET caddr = ? WHERE cid = ?");
+            $up_stmt->bind_param("si", $new_addr, $cid);
+            if ($up_stmt->execute()) {
+                $success_message = "Success: Shipping Address updated successfully for future collections.";
+            } else {
+                $error_message = "Failure: Database processing error during address update.";
+            }
+            $up_stmt->close();
+        } else {
+            $error_message = "Failure: Shipping Address field is required.";
+        }
+    }
+
+    // 【表單 C】：更新安全密碼 (Password Security Check)
+    if (isset($_POST['update_password'])) {
+        $active_tab = 'security';
+        $current_pass = trim($_POST['current_password']);
+        $new_pass = trim($_POST['new_password']);
+        $confirm_pass = trim($_POST['confirm_password']);
+
+        if (!empty($current_pass) && !empty($new_pass) && !empty($confirm_pass)) {
+            if ($new_pass !== $confirm_pass) {
+                $error_message = "Failure: New password entries do not match. Please verify.";
+            } else {
+                // 撈出目前資料庫內儲存的真實舊密碼進行比對
+                $pwd_stmt = $conn->prepare("SELECT cpassword FROM Customers WHERE cid = ? LIMIT 1");
+                $pwd_stmt->bind_param("i", $cid);
+                $pwd_stmt->execute();
+                $pwd_row = $pwd_stmt->get_result()->fetch_assoc();
+                $pwd_stmt->close();
+
+                // 支援明文或 Hash 雙重比對（相容你的初始假數據）
+                if ($current_pass === $pwd_row['cpassword'] || password_verify($current_pass, $pwd_row['cpassword'])) {
+                    $up_stmt = $conn->prepare("UPDATE Customers SET cpassword = ? WHERE cid = ?");
+                    $up_stmt->bind_param("si", $new_pass, $cid);
+                    if ($up_stmt->execute()) {
+                        $success_message = "Success: Account security credentials updated safely.";
+                    } else {
+                        $error_message = "Failure: Database processing error during password reset.";
+                    }
+                    $up_stmt->close();
+                } else {
+                    $error_message = "Failure: Current Password is incorrect. Authentication failed.";
+                }
+            }
+        } else {
+            $error_message = "Failure: All password tracking fields are mandatory.";
+        }
+    }
+}
+
+// ====================================================================================
+// 🚀 數據即時渲染：每次加載網頁，動態撈出該使用者的最新真實數據
+// ====================================================================================
+$cust_stmt = $conn->prepare("SELECT cname, ctel, caddr FROM Customers WHERE cid = ? LIMIT 1");
+$cust_stmt->bind_param("i", $cid);
+$cust_stmt->execute();
+$cust_data = $cust_stmt->get_result()->fetch_assoc();
+$cust_stmt->close();
+
+// 防空安全變數轉換
+$db_name = isset($cust_data['cname']) ? $cust_data['cname'] : '';
+$db_tel  = isset($cust_data['ctel'])  ? $cust_data['ctel']  : '';
+$db_addr = isset($cust_data['caddr']) ? $cust_data['caddr'] : '';
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -5,149 +136,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Settings | Premium Living</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<!-- 引入我們 100% 最高覆蓋權限的公用樣式表 -->
+<link rel="stylesheet" href="staff/staff_style.css">
+<link rel="stylesheet" href="cust_style.css">
 <style>
-  :root {
-    --primary-color: #2c3e50;
-    --accent-color: #3498db;
-    --text-muted: #7f8c8d;
-    --bg-light: #f8f9fa;
-    --border: #ececec;
-    --danger: #e74c3c;
-    --success: #27ae60;
-  }
-
-  * { box-sizing: border-box; transition: all 0.2s ease; }
-  body { font-family: 'Inter', sans-serif; margin: 0; background-color: #fcfcfc; color: #333; overflow-y: scroll; }
-
-  /* --- Navigation --- */
-  nav.top-nav { 
-    background: #fff; padding: 15px 8%; display: flex; justify-content: space-between; 
-    align-items: center; border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 1000;
-  }
-  .logo { font-family: 'Playfair Display', serif; font-size: 24px; font-weight: bold; color: var(--primary-color); text-decoration: none; }
-  .logo span { color: var(--accent-color); }
-
-  /* --- Layout Wrapper --- */
-  .main-wrapper { 
-    max-width: 1200px; margin: 40px auto; padding: 0 5%; 
-    display: flex; gap: 30px; 
-  }
-
-  /* --- Sidebar --- */
-  .sidebar { width: 280px; flex-shrink: 0; background: #fff; border: 1px solid var(--border); border-radius: 16px; padding: 20px; height: fit-content; }
-  .sidebar-header { padding: 0 10px 20px; border-bottom: 1px solid var(--border); margin-bottom: 15px; }
-  .sidebar-header h3 { margin: 0; font-size: 18px; color: var(--primary-color); }
-  
-  .menu-item { 
-    display: flex; align-items: center; padding: 12px 18px; text-decoration: none; 
-    color: #555; font-size: 14px; border-radius: 12px; margin-bottom: 8px; gap: 12px; cursor: pointer;
-  }
-  .menu-item:hover { background: var(--bg-light); color: var(--accent-color); }
-  .menu-item.active { background: var(--accent-color); color: white; font-weight: 600; }
-  .menu-item i { font-style: normal; font-size: 18px; width: 24px; text-align: center; }
-
-  /* --- Content Card (Tab Pages) --- */
-  .tab-content { display: none; width: 100%; }
-  .tab-content.active { display: block; animation: fadeIn 0.3s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-  .content-card { 
-    background: #fff; border: 1px solid var(--border); border-radius: 20px; padding: 40px; 
-    box-shadow: 0 4px 20px rgba(0,0,0,0.02);
-  }
-  .content-header { margin-bottom: 35px; }
-  .content-header h2 { font-family: 'Playfair Display', serif; font-size: 32px; margin: 0; color: var(--primary-color); }
-  .content-header p { color: var(--text-muted); font-size: 14px; margin-top: 10px; }
-
-  /* --- Form Layout --- */
-  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
-  .form-group.full { grid-column: span 2; }
-  label { display: block; font-size: 11px; font-weight: 700; color: var(--primary-color); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-  input, select { width: 100%; padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 15px; background: #fbfbfb; }
-  input:focus { border-color: var(--accent-color); background: #fff; outline: none; }
-
-  .btn-save { background: var(--primary-color); color: white; border: none; padding: 16px 45px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; margin-top: 20px; }
-  .btn-save:hover { background: var(--accent-color); transform: translateY(-2px); }
-
-  /* Responsive */
-  @media (max-width: 850px) {
-    .main-wrapper { flex-direction: column; }
-    .sidebar { width: 100%; }
-  }
+    /* 輕量內聯補丁：保障 Toast 通知在設定頁也能優雅漂浮 */
+    .alert {
+        position: fixed; bottom: 25px; right: 25px; z-index: 99999;
+        min-width: 320px; max-width: 450px; padding: 16px 20px; border-radius: 8px;
+        font-weight: bold; font-size: 14px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        display: flex; align-items: center; gap: 12px; opacity: 0; transform: translateX(50px);
+        transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .alert.toast-show { opacity: 1; transform: translateX(0); }
+    .alert.toast-hide { opacity: 0; transform: translateY(-20px); transition: opacity 0.4s ease, transform 0.4s ease; }
+    .alert-success { background: #ffffff; color: #1e293b; border-left: 5px solid #2ecc71; }
+    .alert-danger { background: #ffffff; color: #1e293b; border-left: 5px solid #e74c3c; }
 </style>
 </head>
-<body>
+<body class="pl-settings-body">
 
+<!-- 頂部全局高級導覽列 -->
 <nav class="top-nav">
   <a href="index.php" class="logo">Premium<span>Living</span></a>
-  <div style="font-size: 14px; color: var(--text-muted);">Signed in as <strong>Alex Wong</strong></div>
+  <div style="font-size: 14px; color: #7f8c8d;">Signed in as <strong><?php echo htmlspecialchars($_SESSION['cust_name']); ?></strong></div>
 </nav>
 
+<!-- 右下角浮動 Toast 回饋通知 -->
+<?php if ($success_message != '') echo "<div class='alert alert-success'>$success_message</div>"; ?>
+<?php if ($error_message != '') echo "<div class='alert alert-danger'>$error_message</div>"; ?>
+
 <div class="main-wrapper">
+  <!-- 左側邊欄頁籤選單 -->
   <aside class="sidebar">
     <div class="sidebar-header">
       <h3>Account Settings</h3>
     </div>
     <nav class="sidebar-menu">
-      <div class="menu-item active" onclick="openTab(event, 'profile')"><i>👤</i> Personal Info</div>
-      <div class="menu-item" onclick="openTab(event, 'address')"><i>📍</i> Shipping Address</div>
-      <div class="menu-item" onclick="openTab(event, 'security')"><i>🔒</i> Password & Security</div>
-      <a href="dashboard.php" class="menu-item" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;"><i>📦</i> Back to DashBoard</a>
+      <div class="menu-item <?php echo ($active_tab === 'profile') ? 'active' : ''; ?>" data-tab="profile"><i>👤</i> Personal Info</div>
+      <div class="menu-item <?php echo ($active_tab === 'address') ? 'active' : ''; ?>" data-tab="address"><i>📍</i> Shipping Address</div>
+      <div class="menu-item <?php echo ($active_tab === 'security') ? 'active' : ''; ?>" data-tab="security"><i>🔒</i> Password & Security</div>
+      <a href="dashboard.php" class="menu-item" style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 20px;"><i>📦</i> Back to Dashboard</a>
     </nav>
   </aside>
 
+  <!-- 右側各分頁卡片容器 -->
   <div style="flex-grow: 1;">
     
-    <div id="profile" class="tab-content active">
+    <!-- SECTION 1: 👤 PERSONAL INFO TAB -->
+    <div id="profile" class="tab-content <?php echo ($active_tab === 'profile') ? 'active' : ''; ?>">
       <div class="content-card">
         <div class="content-header">
           <h2>Personal Information</h2>
-          <p>Manage your basic account details and language preferences.</p>
+          <p>Manage your basic account details and contact verification parameters.</p>
         </div>
-        <form onsubmit="alert('Profile Updated!'); return false;">
+        <form action="profile_edit.php" method="POST">
           <div class="form-grid">
-            <div class="form-group"><label>First Name</label><input type="text" value="Alex"></div>
-            <div class="form-group"><label>Last Name</label><input type="text" value="Wong"></div>
-            <div class="form-group full"><label>Email Address</label><input type="email" value="alex.wong@example.com"></div>
-            <div class="form-group"><label>Phone</label><input type="tel" value="+852 9876 5432"></div>
-            <div class="form-group"><label>Language</label><select><option>English</option><option>Traditional Chinese</option></select></div>
+            <div class="form-group full">
+              <label>Full Account Name *</label>
+              <input type="text" name="cname" value="<?php echo htmlspecialchars($db_name); ?>" required>
+            </div>
+            <div class="form-group">
+              <label>Contact Phone Number</label>
+              <input type="tel" name="ctel" value="<?php echo htmlspecialchars($db_tel); ?>" placeholder="+852 9000 0000">
+            </div>
+            <div class="form-group">
+              <label>Account Level Tier</label>
+              <input type="text" value="Premium Collector" readonly style="background:#eee; color:#7f8c8d; cursor:not-allowed;">
+            </div>
           </div>
-          <button type="submit" class="btn-save">Save Profile</button>
+          <button type="submit" name="update_profile" class="btn-save">Save Profile</button>
         </form>
       </div>
     </div>
 
-    <div id="address" class="tab-content">
+    <!-- SECTION 2: 📍 SHIPPING ADDRESS TAB -->
+    <div id="address" class="tab-content <?php echo ($active_tab === 'address') ? 'active' : ''; ?>">
       <div class="content-card">
         <div class="content-header">
           <h2>Shipping Address</h2>
-          <p>Your primary delivery location for all furniture orders.</p>
+          <p>Your primary delivery location for all bespoke artisan furniture orders.</p>
         </div>
-        <form onsubmit="alert('Address Updated!'); return false;">
-          <div class="form-grid">
-            <div class="form-group full"><label>Street Address</label><input type="text" value="Flat A, 12/F, Nathan Luxury Tower"></div>
-            <div class="form-group"><label>District</label><input type="text" value="Tsim Sha Tsui"></div>
-            <div class="form-group"><label>City / Region</label><input type="text" value="Kowloon" readonly style="background:#eee;"></div>
+        <form action="profile_edit.php" method="POST">
+          <div class="form-grid single-col">
+            <div class="form-group">
+              <label>Full Logistics Delivery Address *</label>
+              <input type="text" name="caddr" value="<?php echo htmlspecialchars($db_addr); ?>" placeholder="Flat, Floor, Building Name, Street, District" required>
+            </div>
           </div>
-          <button type="submit" class="btn-save">Update Address</button>
+          <button type="submit" name="update_address" class="btn-save">Update Address</button>
         </form>
       </div>
     </div>
 
-    <div id="security" class="tab-content">
+    <!-- SECTION 3: 🔒 PASSWORD & SECURITY TAB -->
+    <div id="security" class="tab-content <?php echo ($active_tab === 'security') ? 'active' : ''; ?>">
       <div class="content-card">
         <div class="content-header">
           <h2>Security & Password</h2>
-          <p>Ensure your account stays secure with a strong password.</p>
+          <p>Ensure your boutique collection account remains guarded with a robust key credential.</p>
         </div>
-        <form onsubmit="alert('Password Changed!'); return false;">
-          <div class="form-grid" style="grid-template-columns: 1fr;">
-            <div class="form-group"><label>Current Password</label><input type="password" placeholder="••••••••"></div>
-            <div class="form-group"><label>New Password</label><input type="password" placeholder="Enter new password"></div>
-            <div class="form-group"><label>Confirm New Password</label><input type="password" placeholder="Repeat new password"></div>
+        <form action="profile_edit.php" method="POST" id="pl-security-form">
+          <div class="form-grid single-col">
+            <div class="form-group">
+              <label>Current Credentials Password *</label>
+              <input type="password" name="current_password" placeholder="••••••••" required>
+            </div>
+            <div class="form-group">
+              <label>New Strong Password *</label>
+              <input type="password" name="new_password" id="pl-new-password" placeholder="Enter brand new password key" required>
+            </div>
+            <div class="form-group">
+              <label>Confirm New Password *</label>
+              <input type="password" name="confirm_password" id="pl-confirm-password" placeholder="Re-type new password key" required>
+            </div>
           </div>
-          <button type="submit" class="btn-save" style="background: var(--accent-color);">Update Password</button>
+          <button type="submit" name="update_password" class="btn-save" style="background: var(--accent-color);">Update Password</button>
         </form>
       </div>
     </div>
@@ -155,28 +259,21 @@
   </div>
 </div>
 
+<!-- 引入公共隔離保護與 Tab 切換監聽引擎腳本 -->
+<script src="cust_script.js"></script>
 <script>
-  function openTab(evt, tabName) {
-    const tabContents = document.getElementsByClassName("tab-content");
-    for (let i = 0; i < tabContents.length; i++) {
-      tabContents[i].classList.remove("active");
-    }
-    const menuItems = document.getElementsByClassName("menu-item");
-    for (let i = 0; i < menuItems.length; i++) {
-      menuItems[i].classList.remove("active");
-    }
-
-    document.getElementById(tabName).classList.add("active");
-    evt.currentTarget.classList.add("active");
-  }
-
-  window.onload = function() {
-    if(window.location.hash === '#address') {
-      const addressBtn = document.querySelector('[onclick*="address"]');
-      if(addressBtn) addressBtn.click();
-    }
-  }
+    // 為了無縫讓右上角跳出的 Toast 在設定頁 3 秒內自動滑出消散
+    document.addEventListener("DOMContentLoaded", function() {
+        const alerts = document.querySelectorAll('.pl-settings-body .alert');
+        alerts.forEach(function(alert) {
+            setTimeout(function() { alert.classList.add('toast-show'); }, 50);
+            setTimeout(function() {
+                alert.classList.remove('toast-show');
+                alert.classList.add('toast-hide');
+                setTimeout(function() { alert.remove(); }, 400);
+            }, 3000); 
+        });
+    });
 </script>
-
 </body>
 </html>

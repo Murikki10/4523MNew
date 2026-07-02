@@ -141,7 +141,6 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['update_order_items']))
 $query = "SELECT o.oid, o.odate, o.ototalamount, o.ostatus, o.odeliveraddress, o.odeliverydate, c.cname, c.ctel 
           FROM Orders o 
           JOIN Customers c ON o.cid = c.cid 
-          WHERE o.ostatus != 1
           ORDER BY o.oid DESC";
 $result = mysqli_query($conn, $query);
 ?>
