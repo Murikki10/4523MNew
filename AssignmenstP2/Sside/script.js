@@ -5,25 +5,22 @@
 // ---------------------------------------------------------
 // SECTION 1: Slide-in Floating Toast Notifications (右下角滑入通知)
 // ---------------------------------------------------------
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
     const alerts = document.querySelectorAll('.alert');
-    
-    alerts.forEach(function(alert) {
-        // 1. 延遲 100 毫秒觸發滑入，確保瀏覽器能順利渲染 transition 動畫
-        setTimeout(function() {
+
+    alerts.forEach(function (alert) {
+        setTimeout(function () {
             alert.classList.add('toast-show');
         }, 100);
 
-        // 2. 停留 3000 毫秒 (3秒) 後自動執行滑出淡出
-        setTimeout(function() {
+        setTimeout(function () {
             alert.classList.remove('toast-show');
             alert.classList.add('toast-hide');
-            
-            // 3. 當滑出動畫行完之後 (0.4秒後)，徹底將網頁元件拔除
-            setTimeout(function() {
+
+            setTimeout(function () {
                 alert.remove();
             }, 400);
-        }, 3000); 
+        }, 3000);
     });
 });
 
@@ -53,7 +50,7 @@ function confirmSelection() {
     const displayContainer = document.getElementById("selected-materials-display");
     const checkboxes = document.querySelectorAll(".mat-check");
     const quantities = document.querySelectorAll(".mat-qty");
-    
+
     let renderedHtml = "";
     let hasSelection = false;
 
@@ -61,7 +58,7 @@ function confirmSelection() {
         if (cb.checked) {
             const qty = quantities[index].value || 1;
             const name = cb.getAttribute("data-name");
-            
+
             renderedHtml += `
                 <div class="material-tag">
                     <span>${name} (x${qty})</span>
@@ -144,7 +141,7 @@ function closeFurnitureEditModal() {
 // ---------------------------------------------------------
 
 // Safely handles background clicks for BOTH modals to prevent conflicts
-window.onclick = function(event) {
+window.onclick = function (event) {
     const materialModal = document.getElementById("materialModal");
     const editModal = document.getElementById("editFurnitureModal");
 

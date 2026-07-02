@@ -10,18 +10,21 @@ if (!isset($_SESSION['staff_id']) || !isset($_SESSION['staff_name'])) {
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Staff Home - Premium Living Furniture</title>
     <link rel="stylesheet" href="staff_style.css">
 </head>
+
 <body>
 
     <div class="top-bar">
         <div class="logo-section">🛋️ Premium Living Staff</div>
         <div class="user-info">
-            <span class="user-name">👤 Welcome, <strong><?php echo htmlspecialchars($_SESSION['staff_name']); ?></strong></span>
+            <span class="user-name">👤 Welcome,
+                <strong><?php echo htmlspecialchars($_SESSION['staff_name']); ?></strong></span>
             <a href="logout.php" class="btn-logout">Logout</a>
         </div>
     </div>
@@ -60,4 +63,5 @@ if (!isset($_SESSION['staff_id']) || !isset($_SESSION['staff_name'])) {
     </div>
 
 </body>
+
 </html>

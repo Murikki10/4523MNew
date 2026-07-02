@@ -373,10 +373,25 @@ table tr:hover {
     font-weight: bold;
 }
 
-.status-1 { background: #e0f2fe; color: #0369a1; }
-.status-2 { background: #fef3c7; color: #d97706; }
-.status-3 { background: #dcfce7; color: #15803d; }
-.status-0 { background: #fee2e2; color: #b91c1c; }
+.status-1 {
+    background: #e0f2fe;
+    color: #0369a1;
+}
+
+.status-2 {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.status-3 {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.status-0 {
+    background: #fee2e2;
+    color: #b91c1c;
+}
 
 .modal {
     display: none;
@@ -622,16 +637,19 @@ table tr:hover {
     border-bottom: 2px solid #3498db;
     padding-bottom: 10px;
 }
+
 .form-row .name-group {
     flex: 3;
 }
+
 .form-row .price-group {
     flex: 1;
-    max-width: 180px; 
+    max-width: 180px;
 }
+
 .form-actions-row {
     display: flex;
-    justify-content: space-between; 
+    justify-content: space-between;
     gap: 20px;
     margin-top: 25px;
 }
@@ -641,7 +659,7 @@ table tr:hover {
     font-size: 15px;
     flex: 1;
     text-align: center;
-    box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
 }
 
 .thumbnail {
@@ -765,7 +783,8 @@ table tr:hover {
 
 /* Styling for the newly added File Input container */
 .form-group input[type="file"] {
-    padding: 7px 10px; /* Slight adjustment to align native text cleanly */
+    padding: 7px 10px;
+    /* Slight adjustment to align native text cleanly */
     background: #f8f9fa;
     cursor: pointer;
 }
@@ -870,6 +889,7 @@ table tr:hover {
    9. PRINT MEDIA STYLES
    ========================================================================== */
 @media print {
+
     .sidebar,
     .btn-print {
         display: none !important;
@@ -895,7 +915,7 @@ table tr:hover {
 }
 
 /* ==========================================================================
-   10. FLOATING TOAST NOTIFICATIONS (右下角輕量化通知)
+   10. FLOATING TOAST NOTIFICATIONS
    ========================================================================== */
 .alert {
     position: fixed;
@@ -912,11 +932,11 @@ table tr:hover {
     display: flex;
     align-items: center;
     gap: 12px;
-    
+
     opacity: 0;
     transform: translateX(50px);
-    transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), 
-                transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: opacity 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .alert.toast-show {
@@ -949,10 +969,9 @@ table tr:hover {
 }
 
 /* ==========================================================================
-   11. ORDERS SEARCH & SORT COMPONENTS (manage_orders.php 專屬控制列)
+   11. ORDERS SEARCH & SORT COMPONENTS (manage_orders.php)
    ========================================================================== */
 
-/* 搜尋鍵盤輸入框與排序下拉選單的標準現代化外框 */
 #order-search-input,
 #order-sort-select {
     width: 100%;
@@ -965,7 +984,6 @@ table tr:hover {
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* 當輸入框獲得焦點（Focus）時的流暢高亮藍框動畫 */
 #order-search-input:focus,
 #order-sort-select:focus {
     border-color: #3498db;
@@ -973,12 +991,10 @@ table tr:hover {
     outline: none;
 }
 
-/* 當動態搜尋隱藏/顯示訂單行時的淡入淡出流暢過渡效果 */
 .order-data-row {
     transition: opacity 0.25s ease-in-out;
 }
 
-/* 當完全搜尋唔到任何客戶名字時，動態動態表格行（No Results Found）的視覺美化 */
 .no-results-row td {
     text-align: center;
     color: #7f8c8d;

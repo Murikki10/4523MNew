@@ -76,7 +76,7 @@ if (isset($_GET['delete_id'])) {
     } else {
       $del_stmt = $conn->prepare("DELETE FROM Materials WHERE mid = ?");
       $del_stmt->bind_param("i", $delete_mid);
-      
+
       if ($del_stmt->execute()) {
         $success_message = "Material ID #" . $delete_mid . " has been permanently deleted from inventory storage.";
       } else {
@@ -93,12 +93,14 @@ $result = mysqli_query($conn, $query);
 ?>
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Material Control - Premium Living Staff</title>
   <link rel="stylesheet" href="staff_style.css">
 </head>
+
 <body>
 
   <div class="sidebar">
@@ -118,8 +120,10 @@ $result = mysqli_query($conn, $query);
   <div class="content">
     <h2>Material Inventory Control</h2>
 
-    <?php if ($success_message != '') echo "<div class='alert alert-success'>$success_message</div>"; ?>
-    <?php if ($error_message != '') echo "<div class='alert alert-danger'>$error_message</div>"; ?>
+    <?php if ($success_message != '')
+      echo "<div class='alert alert-success'>$success_message</div>"; ?>
+    <?php if ($error_message != '')
+      echo "<div class='alert alert-danger'>$error_message</div>"; ?>
 
     <div class="form-card">
       <h4 style="margin-top:0; color:#34495e;">Register New Material</h4>
@@ -141,7 +145,8 @@ $result = mysqli_query($conn, $query);
               <option value="block">block</option>
             </select>
           </div>
-          <button type="submit" name="add_material" class="btn btn-primary" style="align-self: flex-end; margin-bottom: 4px; height: 40px; padding: 0 25px;">➕ Register</button>
+          <button type="submit" name="add_material" class="btn btn-primary"
+            style="align-self: flex-end; margin-bottom: 4px; height: 40px; padding: 0 25px;">➕ Register</button>
         </div>
       </form>
     </div>
@@ -173,7 +178,7 @@ $result = mysqli_query($conn, $query);
               echo "<td class='" . $qty_class . "'>" . $row['mqty'] . "</td>";
               echo "<td>" . htmlspecialchars($row['munit']) . "</td>";
               echo "<td>" . $status_markup . "</td>";
-              
+
               echo "<td>
                       <div style='display:inline-flex; align-items:center; gap:12px;'>
                         <form method='POST' action='manage_materials.php' style='display:inline-flex; gap:6px; align-items:center; margin:0;'>
@@ -198,4 +203,5 @@ $result = mysqli_query($conn, $query);
 
   <script src="./script.js"></script>
 </body>
+
 </html>

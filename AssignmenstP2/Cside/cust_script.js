@@ -38,7 +38,7 @@
 
     // Automated float toast dismissal animation sequence controller
     function initToastController() {
-        const alerts = document.querySelectorAll('.pl-auth-wrapper .alert');
+        const alerts = document.querySelectorAll('.alert');
         alerts.forEach(function(alert) {
             setTimeout(function() { alert.classList.add('toast-show'); }, 100);
             setTimeout(function() {
@@ -49,7 +49,7 @@
         });
     }
 
-    // Initialize module event tracking
+    // Initialize module event tracking and programmatic event binding
     document.addEventListener("DOMContentLoaded", function() {
         initToastController();
 
@@ -57,12 +57,23 @@
         if (registerForm) {
             registerForm.addEventListener('submit', validatePasswords);
         }
+
+        // 🌐 Standard Event Listeners binding for the panel switching buttons
+        const toRegisterBtn = document.getElementById('pl-trigger-to-register');
+        if (toRegisterBtn) {
+            toRegisterBtn.addEventListener('click', function() {
+                switchForm('register');
+            });
+        }
+
+        const toLoginBtn = document.getElementById('pl-trigger-to-login');
+        if (toLoginBtn) {
+            toLoginBtn.addEventListener('click', function() {
+                switchForm('login');
+            });
+        }
     });
-
-    // Expose layout swapper globally to intercept legacy inline anchor onclick references
-    window.switchForm = switchForm;
 })();
-
 
 /* --------------------------------------------------------------------------
    📌 MODULE 2: FRONT-END FURNITURE CATALOG HOME ENGINE (index.php)
@@ -299,7 +310,6 @@
         });
     }
 
-    // 🌐 攔截並驗證欄位，通過後點亮高級磨砂玻璃彈窗
     function triggerClientSuccessModal() {
         if (cart.length === 0) {
             alert("Your shopping cart is currently empty!");
@@ -316,7 +326,6 @@
         if (successModal) successModal.style.display = 'flex';
     }
 
-    // 🌐 根據最終選擇，將數據塞入隱藏欄位，清空 LocalStorage 並正式觸發 Form 提交
     function executeFinalFormSubmit(targetDestination) {
         const redirectInput = document.getElementById('pl-redirect-target');
         const hiddenCartInput = document.getElementById('pl-hidden-cart-data');
@@ -324,16 +333,12 @@
         
         if (!redirectInput || !hiddenCartInput || !checkoutForm) return;
 
-        // 寫入目的地變數 (dashboard.php / index.php)
         redirectInput.value = targetDestination;
 
-        // 打包最新購物車資料
         hiddenCartInput.value = JSON.stringify(cart);
         
-        // 🚀 下單完成：秒速抽乾清空 LocalStorage
         localStorage.removeItem('furniture_cart');
 
-        // 正式命令表單發射給後端 PHP 執行資料庫 INSERT
         checkoutForm.submit();
     }
 
@@ -366,7 +371,6 @@
         renderCheckoutCart();
         enforceMinCraftingLeadTime();
 
-        // 🌐 使用標準 JavaScript 監聽器綁定按鈕，防止內聯 onclick 丟失問題
         const fakeSubmitBtn = document.getElementById('pl-fake-submit-trigger');
         if (fakeSubmitBtn) {
             fakeSubmitBtn.addEventListener('click', triggerClientSuccessModal);
@@ -593,7 +597,6 @@
         if (targetTab) targetTab.classList.add("active");
         evt.currentTarget.classList.add("active");
         
-        // 同步將 Tab Name 寫入網址 Hash，方便刷新後留喺原位
         window.location.hash = tabName;
     }
 
@@ -610,7 +613,6 @@
     }
 
     document.addEventListener("DOMContentLoaded", function() {
-        // 綁定頁籤點擊事件
         const menuItems = document.querySelectorAll(".sidebar-menu .menu-item[data-tab]");
         menuItems.forEach(item => {
             item.addEventListener("click", function(e) {
@@ -619,18 +621,15 @@
             });
         });
 
-        // 綁定密碼表單校正
         const securityForm = document.getElementById('pl-security-form');
         if (securityForm) {
             securityForm.addEventListener('submit', validateSecurityForm);
         }
 
-        // 網址 Hash 錨點追蹤檢測（如：profile_edit.php#address）
         if (window.location.hash) {
             const hash = window.location.hash.replace('#', '');
             const activeBtn = document.querySelector(`.sidebar-menu .menu-item[data-tab="${hash}"]`);
             if (activeBtn) {
-                // 模擬點擊觸發
                 activeBtn.click();
             }
         }

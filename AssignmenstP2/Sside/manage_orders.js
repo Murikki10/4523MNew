@@ -1,8 +1,3 @@
-/* ==========================================================================
-   Premium Living Staff Portal - Advanced ERP Orders Management Engine
-   (全功能交叉聯動：Omni 搜尋框、新增獨立 Status 欄位篩選、原本多條件排序、彈窗引擎)
-   ========================================================================== */
-
 let currentOrderItems = [];
 let editModeActive = false;
 
@@ -11,12 +6,10 @@ let editModeActive = false;
 // --------------------------------------------------------------------------
 function filterAndSortOrders() {
     const searchKeyword = document.getElementById('order-search-input').value.toLowerCase().trim();
-    // 🚀 抓取新加入的「Filter by Status」下拉選單數值
     const statusFilter = document.getElementById('order-status-filter').value;
-    // 抓取原本的「Sort Order By」排序選單數值
     const sortValue = document.getElementById('order-sort-select').value;
     const tableBody = document.querySelector('table tbody');
-    
+
     if (!tableBody) return;
 
     const rows = Array.from(tableBody.querySelectorAll('.order-data-row'));
@@ -25,28 +18,24 @@ function filterAndSortOrders() {
 
     let visibleCount = 0;
 
-    // 1. 雙重交叉過濾：Omni Search 聯動 Status Filter 篩選
     rows.forEach(row => {
         const orderId = row.getAttribute('data-oid') || "";
         const formattedId = "ord-" + String(orderId).padStart(4, '0');
         const customerName = row.getAttribute('data-cname') || "";
         const customerTel = row.getAttribute('data-ctel') || "";
         const furnitureItems = row.getAttribute('data-furnitures') || "";
-        const rowStatus = row.getAttribute('data-ostatus') || ""; // 訂單本身的真實狀態
+        const rowStatus = row.getAttribute('data-ostatus') || "";
 
-        // 條件 A：檢查是否匹配 Omni 搜尋關鍵字
         const matchesKeyword = (
-            orderId.includes(searchKeyword) || 
+            orderId.includes(searchKeyword) ||
             formattedId.includes(searchKeyword) ||
-            customerName.includes(searchKeyword) || 
-            customerTel.includes(searchKeyword) || 
+            customerName.includes(searchKeyword) ||
+            customerTel.includes(searchKeyword) ||
             furnitureItems.includes(searchKeyword)
         );
 
-        // 條件 B：檢查是否符合新狀態選單篩選（如果是 "all" 則免篩選）
         const matchesStatus = (statusFilter === 'all' || rowStatus === statusFilter);
 
-        // 🚀 兩大條件同時成立，該列才顯示
         if (matchesKeyword && matchesStatus) {
             row.style.display = "";
             visibleCount++;
@@ -55,7 +44,6 @@ function filterAndSortOrders() {
         }
     });
 
-    // 2. 原本的 Short 排序算法 (100% 完整保留)
     rows.sort((rowA, rowB) => {
         if (sortValue === 'date-desc') return Number(rowB.getAttribute('data-timestamp')) - Number(rowA.getAttribute('data-timestamp'));
         if (sortValue === 'date-asc') return Number(rowA.getAttribute('data-timestamp')) - Number(rowB.getAttribute('data-timestamp'));
@@ -80,7 +68,6 @@ function filterAndSortOrders() {
         return 0;
     });
 
-    // 3. 將最終結果重掛回 DOM 表格
     rows.forEach(row => tableBody.appendChild(row));
 
     if (visibleCount === 0) {
@@ -99,8 +86,8 @@ function handleRowClick(rowElement) {
         oid: rowElement.getAttribute('data-oid'),
         odate: rowElement.getAttribute('data-odate'),
         cname: rowElement.getAttribute('data-cname'),
-        ctel: rowElement.getAttribute('data-ctel'), 
-        odeliveraddress: rowElement.getAttribute('data-caddr'), 
+        ctel: rowElement.getAttribute('data-ctel'),
+        odeliveraddress: rowElement.getAttribute('data-caddr'),
         ddate: rowElement.getAttribute('data-ddate'),
         ostatus: rowElement.getAttribute('data-ostatus'),
         items: JSON.parse(rowElement.getAttribute('data-items'))
@@ -120,7 +107,7 @@ function openOrderModal(order) {
 
     const currentStatus = parseInt(order.ostatus);
     document.querySelectorAll('.timeline-step').forEach(step => step.className = 'timeline-step');
-    
+
     if (currentStatus === 0) {
         document.getElementById('step-0').classList.add('active');
     } else {
@@ -167,7 +154,7 @@ function renderModalItems() {
         let recipeHtml = "";
         if (item.materials_recipe && item.materials_recipe.trim() !== "") {
             recipeHtml += `<div class="material-box"><strong>Formula Recipe Mapping (1 unit demands):</strong>`;
-            
+
             const rawPairs = item.materials_recipe.split('||');
             rawPairs.forEach(pair => {
                 const parts = pair.split(':');
@@ -205,7 +192,7 @@ function renderModalItems() {
                     <div style="display:flex; align-items:center; gap:12px; flex:1;">
                         <img src="${imagePath}" onerror="this.src='../Sample Furniture Images/1.png'" style="width:55px; height:55px; object-fit:cover; border-radius:6px; border:1px solid #e2e8f0;">
                         <div style="display:flex; flex-direction:column;">
-                            <span style="font-weight:bold; color:#1e293b; font-size:14px;">${item.fname} <small style="color:#64748b; font-weight:normal;">(ID: #F${String(item.fid).padStart(3,'0')})</small></span>
+                            <span style="font-weight:bold; color:#1e293b; font-size:14px;">${item.fname} <small style="color:#64748b; font-weight:normal;">(ID: #F${String(item.fid).padStart(3, '0')})</small></span>
                             <span style="font-size:12px; color:#64748b; margin-top:2px;">Unit Price: $${parseFloat(item.fprice).toFixed(2)} each</span>
                         </div>
                     </div>
@@ -225,9 +212,9 @@ function renderModalItems() {
 
     const summaryContainer = document.getElementById('modal-total-materials-summary');
     summaryContainer.innerHTML = '';
-    
+
     const accumulatorKeys = Object.keys(totalMaterialsAccumulator);
-    if(accumulatorKeys.length === 0) {
+    if (accumulatorKeys.length === 0) {
         summaryContainer.innerHTML = '<span style="color:#64748b;">No materials requested.</span>';
     } else {
         accumulatorKeys.forEach(mname => {
@@ -280,10 +267,10 @@ function removeItem(index) {
 function calculateModalTotal() {
     let grandTotal = 0;
     currentOrderItems.forEach(item => { grandTotal += item.fprice * parseInt(item.oqty); });
-    
+
     const subtotalEl = document.getElementById('modal-subtotal-price');
     const totalEl = document.getElementById('modal-total');
-    
+
     if (subtotalEl) subtotalEl.innerText = '$' + grandTotal.toFixed(2);
     if (totalEl) totalEl.innerText = '$' + grandTotal.toFixed(2);
 }
@@ -294,14 +281,14 @@ window.onclick = function (event) {
 }
 
 // SECTION 3: Auto-Dismiss Toast Controller
-document.addEventListener("DOMContentLoaded", function() {
+document.addEventListener("DOMContentLoaded", function () {
     const alerts = document.querySelectorAll('.alert');
-    alerts.forEach(function(alert) {
-        setTimeout(function() { alert.classList.add('toast-show'); }, 100);
-        setTimeout(function() {
+    alerts.forEach(function (alert) {
+        setTimeout(function () { alert.classList.add('toast-show'); }, 100);
+        setTimeout(function () {
             alert.classList.remove('toast-show');
             alert.classList.add('toast-hide');
-            setTimeout(function() { alert.remove(); }, 400);
-        }, 3000); 
+            setTimeout(function () { alert.remove(); }, 400);
+        }, 3000);
     });
 });
